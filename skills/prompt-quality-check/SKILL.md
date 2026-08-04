@@ -1,8 +1,8 @@
 ---
-name: Prompt Quality Check
-description: Reviews a prompt for clarity, context, constraints, output shape, and safety before producing an improved version.
-version: 1.0.0
-skill-id: prompt-quality-check
+name: "Prompt Quality Check"
+description: "Reviews a prompt for clarity, context, constraints, output shape, and safety before producing an improved version."
+version: "1.0.1"
+skill-id: "prompt-quality-check"
 ---
 
 # Prompt Quality Check

@@ -71,7 +71,26 @@ def frontmatter(path: Path, errors: list[str]) -> dict[str, str]:
             errors.append(f"{path} has invalid frontmatter line: {line}")
             continue
         key, value = line.split(":", 1)
-        values[key.strip()] = value.strip().strip("\"'")
+        key = key.strip()
+        raw_value = value.strip()
+        if not (
+            len(raw_value) >= 2
+            and raw_value.startswith('"')
+            and raw_value.endswith('"')
+        ):
+            errors.append(
+                f"{path} frontmatter value for {key!r} must be double-quoted"
+            )
+            continue
+        try:
+            parsed_value = json.loads(raw_value)
+        except json.JSONDecodeError:
+            errors.append(f"{path} has invalid quoted frontmatter for {key!r}")
+            continue
+        if not isinstance(parsed_value, str):
+            errors.append(f"{path} frontmatter {key!r} must be a string")
+            continue
+        values[key] = parsed_value
     return values
 
 

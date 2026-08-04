@@ -1,8 +1,8 @@
 ---
-name: Skill Zero: Library Browser
-description: Orchestrates the managed skillcli command to search, install, remove, and update approved skills across detected agent hosts.
-version: 4.0.0
-skill-id: skill-zero
+name: "Skill Zero: Library Browser"
+description: "Orchestrates the managed skillcli command to search, install, remove, and update approved skills across detected agent hosts."
+version: "4.0.2"
+skill-id: "skill-zero"
 ---
 
 # Skill Zero: Library Browser

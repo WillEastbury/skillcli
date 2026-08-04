@@ -67,7 +67,7 @@ if (-not $NoPathUpdate) {
 }
 $env:Path = "$ToolDirectory;$env:Path"
 
-& $wrapperPath install --skill skill-zero
+& $wrapperPath update --skill skill-zero
 if ($LASTEXITCODE -ne 0) {
     throw 'Skill Zero installation failed.'
 }

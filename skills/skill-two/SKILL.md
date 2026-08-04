@@ -1,8 +1,8 @@
 ---
-name: Skill Two: Guided Skill Builder
-description: Builds a new reusable skill from user-approved enterprise evidence when no catalogue skill is suitable.
-version: 2.0.0
-skill-id: skill-two
+name: "Skill Two: Guided Skill Builder"
+description: "Builds a new reusable skill from user-approved enterprise evidence when no catalogue skill is suitable."
+version: "2.0.1"
+skill-id: "skill-two"
 ---
 
 # Skill Two: Guided Skill Builder

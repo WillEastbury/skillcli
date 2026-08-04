@@ -1,8 +1,8 @@
 ---
-name: Skill One: GitHub Intake
-description: Submits a proposed Markdown skill and supporting files on a review branch and opens a governed GitHub issue.
-version: 2.1.0
-skill-id: skill-one
+name: "Skill One: GitHub Intake"
+description: "Submits a proposed Markdown skill and supporting files on a review branch and opens a governed GitHub issue."
+version: "2.1.1"
+skill-id: "skill-one"
 ---
 
 # Skill One: GitHub Intake

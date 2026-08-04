@@ -459,9 +459,10 @@ def replace_folder(
 ) -> tuple[str, str]:
     target = root / skill.metadata["id"]
     reject_symlinks(target)
-    if target.exists() and not allow_existing:
+    existed = target.exists()
+    if existed and not allow_existing:
         return str(target), "already installed"
-    if target.exists():
+    if existed:
         existing = {
             path.relative_to(target).as_posix()
             for path in target.rglob("*")
@@ -483,7 +484,7 @@ def replace_folder(
             destination.write_bytes(value)
         if host == "copilot-cowork" and skill.metadata["id"] == "skill-zero":
             (staged / "catalogue.json").write_bytes(snapshot)
-        if target.exists():
+        if existed:
             target.replace(backup)
         staged.replace(target)
         if backup.exists():
@@ -495,7 +496,7 @@ def replace_folder(
         if transaction.exists():
             shutil.rmtree(transaction)
         raise
-    return str(target), "updated" if allow_existing else "installed"
+    return str(target), "updated" if existed else "installed"
 
 
 def install_or_update(catalogues: Catalogues, skill_id: str, update: bool) -> None:

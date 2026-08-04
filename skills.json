@@ -1,6 +1,6 @@
 {
   "$schema": "schemas/skills.schema.json",
-  "manifestVersion": "3.2.0",
+  "manifestVersion": "3.2.2",
   "library": {
     "id": "skillcli-public",
     "name": "skillcli Public Catalogue",
@@ -82,7 +82,7 @@
     {
       "id": "skill-zero",
       "name": "Skill Zero: Library Browser",
-      "version": "4.0.0",
+      "version": "4.0.2",
       "description": "Orchestrates the managed skillcli command to search, install, remove, and update approved skills across detected agent hosts.",
       "status": "approved",
       "path": "skills/skill-zero",
@@ -146,7 +146,7 @@
     {
       "id": "skill-one",
       "name": "Skill One: GitHub Intake",
-      "version": "2.1.0",
+      "version": "2.1.1",
       "description": "Submits a proposed Markdown skill and supporting files on a review branch and opens a governed GitHub issue.",
       "status": "approved",
       "path": "skills/skill-one",
@@ -203,7 +203,7 @@
     {
       "id": "skill-two",
       "name": "Skill Two: Guided Skill Builder",
-      "version": "2.0.0",
+      "version": "2.0.1",
       "description": "Builds a new reusable skill from user-approved enterprise evidence when no catalogue skill is suitable.",
       "status": "approved",
       "path": "skills/skill-two",
@@ -260,7 +260,7 @@
     {
       "id": "prompt-quality-check",
       "name": "Prompt Quality Check",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "Reviews a prompt for clarity, context, constraints, output shape, and safety before producing an improved version.",
       "status": "approved",
       "path": "skills/prompt-quality-check",
