@@ -13,9 +13,9 @@ The agent remains the user interface. The CLI provides four deterministic comman
 
 ```text
 skillcli search --role seller --query "prompt quality"
-skillcli install --skill prompt-quality-check
-skillcli remove --skill prompt-quality-check
-skillcli update --skill prompt-quality-check
+skillcli install --skill WillEastbury/skillcli/prompt-quality-check
+skillcli remove --skill WillEastbury/skillcli/prompt-quality-check
+skillcli update --skill WillEastbury/skillcli/prompt-quality-check
 skillcli update --all
 ```
 
@@ -42,29 +42,27 @@ The Co-Work copy includes a local catalogue snapshot for import through Customiz
 
 ```json
 {
-  "duplicatePolicy": "highest-priority",
   "sources": [
     {
       "id": "public",
       "repository": "WillEastbury/skillcli",
       "ref": "main",
-      "priority": 10,
       "private": false
     },
     {
       "id": "company",
       "repository": "your-org/private-skills",
       "ref": "main",
-      "priority": 100,
       "private": true
     }
   ]
 }
 ```
 
-Search merges all accessible catalogues and labels each result with its source. Higher
-priority wins when the same skill ID appears more than once. An inaccessible private
-source produces a warning while accessible public sources continue to work.
+Search merges all accessible catalogues and labels each result with its source.
+Every skill is addressed as `OWNER/REPO/skill-id`, so catalogues cannot collide. An
+inaccessible private source produces a warning while accessible public sources continue
+to work.
 
 Private catalogues use the active authenticated `gh` account. Public catalogues can be
 read anonymously.
@@ -91,16 +89,21 @@ it can continue with the repository's governed issue and review workflow.
 <!-- BEGIN GENERATED SKILL CATALOG -->
 | ID | Name | Version | Status | Requirements | Description |
 | --- | --- | --- | --- | --- | --- |
-| `skill-one` | Skill One: GitHub Intake | 2.1.1 | approved | network: github.com, api.github.com; filesystem: read-write; shell: git, skillcli; auth: host-managed GitHub access | Submits a proposed Markdown skill and supporting files on a review branch and opens a governed GitHub issue. |
-| `skill-two` | Skill Two: Guided Skill Builder | 2.0.1 | approved | filesystem: read-write; MCP: dataverse, m365, workiq, other user-approved MCP servers; auth: host-managed MCP access | Builds a new reusable skill from user-approved enterprise evidence when no catalogue skill is suitable. |
-| `skill-zero` | Skill Zero: Library Browser | 4.0.2 | approved | network: github.com, api.github.com; filesystem: read-write; shell: gh, skillcli; auth: host-managed GitHub access | Orchestrates the managed skillcli command to search, install, remove, and update approved skills across detected agent hosts. |
+| `WillEastbury/skillcli/skill-one` | Skill One: GitHub Intake | 3.0.0 | approved | network: github.com, api.github.com; filesystem: read-write; shell: git, skillcli; auth: host-managed GitHub access | Submits a proposed Markdown skill and supporting files on a review branch and opens a governed GitHub issue. |
+| `WillEastbury/skillcli/skill-two` | Skill Two: Guided Skill Builder | 2.0.1 | approved | filesystem: read-write; MCP: dataverse, m365, workiq, other user-approved MCP servers; auth: host-managed MCP access | Builds a new reusable skill from user-approved enterprise evidence when no catalogue skill is suitable. |
+| `WillEastbury/skillcli/skill-zero` | Skill Zero: Library Browser | 5.0.0 | approved | network: github.com, api.github.com; filesystem: read-write; shell: gh, skillcli; auth: host-managed GitHub access | Orchestrates the managed skillcli command to search, install, remove, and update approved skills across detected agent hosts. |
 <!-- END GENERATED SKILL CATALOG -->
 
 ## Governance
 
 - Catalogue changes use pull requests, CODEOWNERS, and CI.
 - Only approved catalogue entries are installable.
-- Installation copies the complete governed folder from one Git commit.
+- Installation downloads only files declared in `skills.json` and verifies each SHA-256
+  checksum before writing.
+- Windows path aliases, reserved names, reparse points, and case-folded collisions are
+  rejected.
+- Installed source metadata binds updates and removals to the original repository
+  namespace.
 - Destination conflicts and unexpected local files are refused.
 - No dependency is installed automatically.
 - Private catalogue content remains in the private repository; this upstream contains

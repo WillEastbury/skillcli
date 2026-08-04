@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import os
 import re
+import stat
 import sys
 from datetime import date
 from pathlib import Path, PurePosixPath
@@ -13,6 +16,52 @@ from urllib.parse import urlparse
 
 ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
+WINDOWS_INVALID = set('<>:"|?*')
+WINDOWS_RESERVED = {
+    "con",
+    "prn",
+    "aux",
+    "nul",
+    *(f"com{index}" for index in range(1, 10)),
+    *(f"lpt{index}" for index in range(1, 10)),
+}
+
+
+def is_reparse_point(path: Path) -> bool:
+    try:
+        attributes = getattr(os.lstat(path), "st_file_attributes", 0)
+    except OSError:
+        return False
+    return bool(attributes & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0))
+
+
+def windows_key(value: str, label: str, errors: list[str]) -> str | None:
+    path = safe_relative(value, label, errors)
+    if not path:
+        return None
+    keys = []
+    for part in path.parts:
+        if part.endswith((" ", ".")):
+            errors.append(f"{label} has a trailing dot/space")
+            return None
+        if any(ord(character) < 32 or character in WINDOWS_INVALID for character in part):
+            errors.append(f"{label} has Windows-invalid characters")
+            return None
+        if part.split(".", 1)[0].casefold() in WINDOWS_RESERVED:
+            errors.append(f"{label} uses a Windows reserved name")
+            return None
+        keys.append(part.casefold())
+    return "/".join(keys)
+
+
+def canonical_bytes(path: Path) -> bytes:
+    content = path.read_bytes()
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        return content
+    return text.replace("\r\n", "\n").replace("\r", "\n").encode("utf-8")
 
 
 def safe_relative(value: Any, label: str, errors: list[str]) -> PurePosixPath | None:
@@ -119,6 +168,12 @@ def validate_repository(root: Path) -> tuple[dict[str, Any] | None, list[str]]:
         errors.append("library.repository must be an HTTPS URL")
     if library.get("updatePolicy") != "notify-only":
         errors.append("library.updatePolicy must be notify-only")
+    namespace = library.get("namespace")
+    if not isinstance(namespace, str) or not re.fullmatch(
+        r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+",
+        namespace,
+    ):
+        errors.append("library.namespace must use OWNER/REPO")
 
     taxonomy = manifest.get("taxonomy")
     if not isinstance(taxonomy, dict):
@@ -220,10 +275,12 @@ def validate_repository(root: Path) -> tuple[dict[str, Any] | None, list[str]]:
         symbolic = [
             item.relative_to(folder).as_posix()
             for item in folder.rglob("*")
-            if item.is_symlink()
+            if item.is_symlink() or is_reparse_point(item)
         ]
         if symbolic:
-            errors.append(f"{label}.path contains symbolic links: {', '.join(symbolic)}")
+            errors.append(
+                f"{label}.path contains links/reparse points: {', '.join(symbolic)}"
+            )
 
         entrypoint = skill.get("entrypoint")
         if entrypoint != "SKILL.md":
@@ -244,6 +301,85 @@ def validate_repository(root: Path) -> tuple[dict[str, Any] | None, list[str]]:
             if metadata.get(key) != expected:
                 errors.append(
                     f"{label} frontmatter {key!r} does not match skills.json"
+                )
+
+        files = skill.get("files")
+        if not isinstance(files, list) or not files:
+            errors.append(f"{label}.files must be a non-empty array")
+        else:
+            declared: dict[str, str] = {}
+            for file_index, record in enumerate(files):
+                file_label = f"{label}.files[{file_index}]"
+                if not isinstance(record, dict):
+                    errors.append(f"{file_label} must be an object")
+                    continue
+                path_value = record.get("path")
+                key = (
+                    windows_key(path_value, f"{file_label}.path", errors)
+                    if isinstance(path_value, str)
+                    else None
+                )
+                if key:
+                    if key in declared:
+                        errors.append(
+                            f"{file_label}.path collides with {declared[key]} on Windows"
+                        )
+                    else:
+                        declared[key] = path_value
+                digest = record.get("sha256")
+                if not isinstance(digest, str) or not SHA256_PATTERN.fullmatch(digest):
+                    errors.append(f"{file_label}.sha256 is invalid")
+                if isinstance(path_value, str):
+                    relative_file = safe_relative(
+                        path_value,
+                        f"{file_label}.path",
+                        errors,
+                    )
+                    if relative_file:
+                        file_path = folder.joinpath(*relative_file.parts)
+                        try:
+                            file_path.resolve().relative_to(folder.resolve())
+                        except ValueError:
+                            errors.append(f"{file_label}.path escapes the skill folder")
+                            continue
+                        if not file_path.is_file():
+                            errors.append(f"{file_label}.path is missing")
+                        elif (
+                            isinstance(digest, str)
+                            and SHA256_PATTERN.fullmatch(digest)
+                            and hashlib.sha256(canonical_bytes(file_path)).hexdigest()
+                            != digest
+                        ):
+                            errors.append(f"{file_label}.sha256 does not match the file")
+            actual: dict[str, str] = {}
+            for item in folder.rglob("*"):
+                if not item.is_file():
+                    continue
+                relative_actual = item.relative_to(folder).as_posix()
+                key = windows_key(
+                    relative_actual,
+                    f"{label} file {relative_actual!r}",
+                    errors,
+                )
+                if key:
+                    if key in actual:
+                        errors.append(
+                            f"{label} file {relative_actual!r} collides with "
+                            f"{actual[key]!r} on Windows"
+                        )
+                    else:
+                        actual[key] = relative_actual
+            undeclared = sorted(set(actual) - set(declared))
+            stale = sorted(set(declared) - set(actual))
+            if undeclared:
+                errors.append(
+                    f"{label} has undeclared files: "
+                    + ", ".join(actual[key] for key in undeclared)
+                )
+            if stale:
+                errors.append(
+                    f"{label} declares absent files: "
+                    + ", ".join(declared[key] for key in stale)
                 )
 
         review = skill.get("review")
@@ -270,9 +406,9 @@ def validate_repository(root: Path) -> tuple[dict[str, Any] | None, list[str]]:
                 errors.append(f"{label} is approved without a complete review")
 
     browser_id = library.get("browserSkillId")
-    if browser_id not in seen:
+    if browser_id is not None and browser_id not in seen:
         errors.append("library.browserSkillId is not registered")
-    else:
+    elif browser_id is not None:
         browser = next(item for item in skills if item.get("id") == browser_id)
         if browser.get("status") != "approved" or browser.get("review", {}).get(
             "state"
@@ -293,8 +429,6 @@ def validate_sources(root: Path) -> list[str]:
         return [f"skill-sources.json could not be read: {exc}"]
     if not isinstance(config, dict):
         return ["skill-sources.json must contain an object"]
-    if config.get("duplicatePolicy") != "highest-priority":
-        errors.append("skill-sources.json duplicatePolicy must be highest-priority")
     sources = config.get("sources")
     if not isinstance(sources, list) or not sources:
         errors.append("skill-sources.json sources must be a non-empty array")
@@ -320,8 +454,6 @@ def validate_sources(root: Path) -> list[str]:
             errors.append(f"{label}.repository must use OWNER/REPO")
         if not isinstance(source.get("ref"), str) or not source["ref"].strip():
             errors.append(f"{label}.ref is invalid")
-        if not isinstance(source.get("priority"), int):
-            errors.append(f"{label}.priority must be an integer")
         if not isinstance(source.get("private"), bool):
             errors.append(f"{label}.private must be boolean")
     return errors

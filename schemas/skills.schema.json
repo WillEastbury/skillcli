@@ -26,8 +26,8 @@
         "name",
         "description",
         "repository",
+        "namespace",
         "defaultRef",
-        "browserSkillId",
         "updatePolicy",
         "governance"
       ],
@@ -44,6 +44,10 @@
         "repository": {
           "type": "string",
           "format": "uri"
+        },
+        "namespace": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
         },
         "defaultRef": {
           "$ref": "#/$defs/text"
@@ -157,7 +161,8 @@
         "runtime",
         "capabilities",
         "source",
-        "review"
+        "review",
+        "files"
       ],
       "properties": {
         "id": {
@@ -301,6 +306,28 @@
                 "null"
               ],
               "format": "date"
+            }
+          }
+        },
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "sha256"
+            ],
+            "properties": {
+              "path": {
+                "type": "string",
+                "pattern": "^[^\\\\/]+(?:/[^\\\\/]+)*$"
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
             }
           }
         }

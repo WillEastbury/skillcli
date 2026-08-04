@@ -1,7 +1,7 @@
 ---
 name: "Skill One: GitHub Intake"
 description: "Submits a proposed Markdown skill and supporting files on a review branch and opens a governed GitHub issue."
-version: "2.1.1"
+version: "3.0.0"
 skill-id: "skill-one"
 ---
 
@@ -19,7 +19,7 @@ Submission does not approve, publish, merge, or install the skill.
 1. Run `skillcli search --role skill-author --query "<proposed purpose>"` to check for an
    existing approved skill.
 2. If the user selects an existing result, run
-   `skillcli install --skill <skill-id>` and stop the submission flow.
+   `skillcli install --skill <owner>/<repo>/<skill-id>` and stop the submission flow.
 3. Otherwise confirm the target repository and proposed lowercase kebab-case skill ID.
 4. Review the proposed folder and require `SKILL.md`.
 5. Reject secrets, credentials, personal data, customer data, hidden files, symbolic

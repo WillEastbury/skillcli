@@ -1,11 +1,12 @@
 {
   "$schema": "schemas/skills.schema.json",
-  "manifestVersion": "3.2.2",
+  "manifestVersion": "4.0.0",
   "library": {
     "id": "skillcli-public",
     "name": "skillcli Public Catalogue",
     "description": "A public governed catalogue of reusable AI Markdown skills.",
     "repository": "https://github.com/WillEastbury/skillcli",
+    "namespace": "WillEastbury/skillcli",
     "defaultRef": "main",
     "browserSkillId": "skill-zero",
     "updatePolicy": "notify-only",
@@ -82,7 +83,7 @@
     {
       "id": "skill-zero",
       "name": "Skill Zero: Library Browser",
-      "version": "4.0.2",
+      "version": "5.0.0",
       "description": "Orchestrates the managed skillcli command to search, install, remove, and update approved skills across detected agent hosts.",
       "status": "approved",
       "path": "skills/skill-zero",
@@ -141,12 +142,22 @@
           "Digital Native Skills Library maintainers"
         ],
         "reviewedAt": "2026-08-04"
-      }
+      },
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "9a3f70215ba738fa1ce70a82d43ed7b0befe7c69a660f899a6844cfaf0b15604"
+        },
+        {
+          "path": "skillcli.py",
+          "sha256": "b2ccd6d231038891908f4ceed7b8dbb819be17e18502c1563a0ad41f9d25626c"
+        }
+      ]
     },
     {
       "id": "skill-one",
       "name": "Skill One: GitHub Intake",
-      "version": "2.1.1",
+      "version": "3.0.0",
       "description": "Submits a proposed Markdown skill and supporting files on a review branch and opens a governed GitHub issue.",
       "status": "approved",
       "path": "skills/skill-one",
@@ -198,7 +209,13 @@
           "Digital Native Skills Library maintainers"
         ],
         "reviewedAt": "2026-08-04"
-      }
+      },
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "137e90f90318cfd7b28502d27cf1b3cb5f9e800861d16e7e564814e6511800b4"
+        }
+      ]
     },
     {
       "id": "skill-two",
@@ -255,7 +272,13 @@
           "Digital Native Skills Library maintainers"
         ],
         "reviewedAt": "2026-08-04"
-      }
+      },
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "725e4afdc3c7dd9d29fe6ab5d7769177f8c27200a1d7a8675ba375b9a75a7ad7"
+        }
+      ]
     },
     {
       "id": "prompt-quality-check",
@@ -304,7 +327,17 @@
           "Digital Native Skills Library maintainers"
         ],
         "reviewedAt": "2026-08-03"
-      }
+      },
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "ae498041bd592c6dc06396ac345586e454babd9ed7db565fcc239ae27da28591"
+        },
+        {
+          "path": "src/prompt_quality.py",
+          "sha256": "e94c86842094f3588be4d92770f94140054a7f1b1d8fbb9b6a9a5b96cecc5594"
+        }
+      ]
     }
   ]
 }
