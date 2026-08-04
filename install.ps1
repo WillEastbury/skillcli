@@ -51,9 +51,9 @@ function Get-RepositoryFile(
         }
         return ($content -join "`n") + "`n"
     }
-    return Invoke-RestMethod `
+    return (Invoke-WebRequest `
         -Uri "https://raw.githubusercontent.com/$Repository/$Commit/$Path" `
-        -Headers @{ 'User-Agent' = 'skillcli-installer' }
+        -Headers @{ 'User-Agent' = 'skillcli-installer' }).Content
 }
 
 $publicCommit = Get-PublicCommit $PublicRepository $PublicRef
