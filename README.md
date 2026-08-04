@@ -1,5 +1,11 @@
 # skillcli
 
+## Install
+
+```powershell
+irm -Headers @{Accept='application/vnd.github.raw+json';'User-Agent'='skillcli'} 'https://api.github.com/repos/WillEastbury/skillcli/contents/install.ps1?ref=main' | iex
+```
+
 `skillcli` is an MIT-licensed, agent-friendly CLI for searching and installing governed
 AI Markdown skills from one or more GitHub catalogues.
 
@@ -13,15 +19,9 @@ skillcli update --skill prompt-quality-check
 skillcli update --all
 ```
 
-## One-command install
+## Private downstream install
 
-Public catalogue:
-
-```powershell
-irm -Headers @{Accept='application/vnd.github.raw+json';'User-Agent'='skillcli'} 'https://api.github.com/repos/WillEastbury/skillcli/contents/install.ps1?ref=main' | iex
-```
-
-Private downstream catalogue layered over public:
+Layer a private catalogue over the public source:
 
 ```powershell
 $env:SKILLCLI_SOURCES_REPOSITORY='your-org/private-skills'; irm -Headers @{Accept='application/vnd.github.raw+json';'User-Agent'='skillcli'} 'https://api.github.com/repos/WillEastbury/skillcli/contents/install.ps1?ref=main' | iex
