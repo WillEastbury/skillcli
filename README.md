@@ -13,15 +13,22 @@ skillcli update --skill prompt-quality-check
 skillcli update --all
 ```
 
-## Install
+## One-command install
 
-Run the reviewed installer from a local checkout or approved distribution:
+Public catalogue:
 
 ```powershell
-.\install-skill-zero.ps1
+irm https://raw.githubusercontent.com/WillEastbury/skillcli/main/install.ps1 | iex
 ```
 
-It downloads `skillcli`, adds it to the user PATH, and installs Skill Zero into detected:
+Private downstream catalogue layered over public:
+
+```powershell
+$env:SKILLCLI_SOURCES_REPOSITORY='your-org/private-skills'; irm https://raw.githubusercontent.com/WillEastbury/skillcli/main/install.ps1 | iex
+```
+
+The installer downloads `skillcli`, adds it to the user PATH, and installs Skill Zero
+into detected:
 
 - GitHub Copilot CLI: `%USERPROFILE%\.copilot\skills`
 - Scout: `%USERPROFILE%\.scout\m-skills`
