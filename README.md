@@ -18,13 +18,13 @@ skillcli update --all
 Public catalogue:
 
 ```powershell
-irm https://raw.githubusercontent.com/WillEastbury/skillcli/main/install.ps1 | iex
+irm -Headers @{Accept='application/vnd.github.raw+json';'User-Agent'='skillcli'} 'https://api.github.com/repos/WillEastbury/skillcli/contents/install.ps1?ref=main' | iex
 ```
 
 Private downstream catalogue layered over public:
 
 ```powershell
-$env:SKILLCLI_SOURCES_REPOSITORY='your-org/private-skills'; irm https://raw.githubusercontent.com/WillEastbury/skillcli/main/install.ps1 | iex
+$env:SKILLCLI_SOURCES_REPOSITORY='your-org/private-skills'; irm -Headers @{Accept='application/vnd.github.raw+json';'User-Agent'='skillcli'} 'https://api.github.com/repos/WillEastbury/skillcli/contents/install.ps1?ref=main' | iex
 ```
 
 The installer downloads `skillcli`, adds it to the user PATH, and installs Skill Zero
