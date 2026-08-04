@@ -1,0 +1,310 @@
+{
+  "$schema": "schemas/skills.schema.json",
+  "manifestVersion": "3.2.0",
+  "library": {
+    "id": "skillcli-public",
+    "name": "skillcli Public Catalogue",
+    "description": "A public governed catalogue of reusable AI Markdown skills.",
+    "repository": "https://github.com/WillEastbury/skillcli",
+    "defaultRef": "main",
+    "browserSkillId": "skill-zero",
+    "updatePolicy": "notify-only",
+    "governance": "Only approved skills merged through the protected repository review process are installable."
+  },
+  "taxonomy": {
+    "roles": [
+      {
+        "id": "business-user",
+        "name": "Business user"
+      },
+      {
+        "id": "developer",
+        "name": "Developer"
+      },
+      {
+        "id": "seller",
+        "name": "Seller"
+      },
+      {
+        "id": "data-analyst",
+        "name": "Data analyst"
+      },
+      {
+        "id": "skill-author",
+        "name": "Skill author"
+      },
+      {
+        "id": "library-maintainer",
+        "name": "Library maintainer"
+      },
+      {
+        "id": "security-reviewer",
+        "name": "Security reviewer"
+      }
+    ],
+    "taskCategories": [
+      {
+        "id": "skill-discovery",
+        "name": "Skill discovery"
+      },
+      {
+        "id": "skill-management",
+        "name": "Skill management"
+      },
+      {
+        "id": "skill-authoring",
+        "name": "Skill authoring"
+      },
+      {
+        "id": "skill-governance",
+        "name": "Skill governance"
+      },
+      {
+        "id": "prompt-engineering",
+        "name": "Prompt engineering"
+      },
+      {
+        "id": "data-analysis",
+        "name": "Data analysis"
+      },
+      {
+        "id": "sales-productivity",
+        "name": "Sales productivity"
+      },
+      {
+        "id": "software-engineering",
+        "name": "Software engineering"
+      }
+    ],
+    "maxResults": 10
+  },
+  "skills": [
+    {
+      "id": "skill-zero",
+      "name": "Skill Zero: Library Browser",
+      "version": "4.0.0",
+      "description": "Orchestrates the managed skillcli command to search, install, remove, and update approved skills across detected agent hosts.",
+      "status": "approved",
+      "path": "skills/skill-zero",
+      "entrypoint": "SKILL.md",
+      "roles": [
+        "business-user",
+        "developer",
+        "seller",
+        "data-analyst",
+        "skill-author",
+        "library-maintainer",
+        "security-reviewer"
+      ],
+      "taskCategories": [
+        "skill-discovery",
+        "skill-management"
+      ],
+      "keywords": [
+        "audit",
+        "catalogue",
+        "discover",
+        "find",
+        "install",
+        "remove",
+        "search",
+        "library",
+        "update"
+      ],
+      "runtime": {
+        "language": "python",
+        "dependencies": []
+      },
+      "capabilities": {
+        "network": [
+          "github.com",
+          "api.github.com"
+        ],
+        "filesystem": "read-write",
+        "shell": [
+          "gh",
+          "skillcli"
+        ],
+        "mcpServers": [],
+        "authentication": [
+          "host-managed GitHub access"
+        ]
+      },
+      "source": {
+        "type": "internal",
+        "repository": "https://github.com/WillEastbury/skillcli",
+        "license": "MIT"
+      },
+      "review": {
+        "state": "approved",
+        "reviewedBy": [
+          "Digital Native Skills Library maintainers"
+        ],
+        "reviewedAt": "2026-08-04"
+      }
+    },
+    {
+      "id": "skill-one",
+      "name": "Skill One: GitHub Intake",
+      "version": "2.1.0",
+      "description": "Submits a proposed Markdown skill and supporting files on a review branch and opens a governed GitHub issue.",
+      "status": "approved",
+      "path": "skills/skill-one",
+      "entrypoint": "SKILL.md",
+      "roles": [
+        "skill-author",
+        "library-maintainer"
+      ],
+      "taskCategories": [
+        "skill-authoring",
+        "skill-governance"
+      ],
+      "keywords": [
+        "contribute",
+        "github",
+        "intake",
+        "issue",
+        "proposal",
+        "review",
+        "submit"
+      ],
+      "runtime": {
+        "language": "none",
+        "dependencies": []
+      },
+      "capabilities": {
+        "network": [
+          "github.com",
+          "api.github.com"
+        ],
+        "filesystem": "read-write",
+        "shell": [
+          "git",
+          "skillcli"
+        ],
+        "mcpServers": [],
+        "authentication": [
+          "host-managed GitHub access"
+        ]
+      },
+      "source": {
+        "type": "internal",
+        "repository": "https://github.com/WillEastbury/skillcli",
+        "license": "MIT"
+      },
+      "review": {
+        "state": "approved",
+        "reviewedBy": [
+          "Digital Native Skills Library maintainers"
+        ],
+        "reviewedAt": "2026-08-04"
+      }
+    },
+    {
+      "id": "skill-two",
+      "name": "Skill Two: Guided Skill Builder",
+      "version": "2.0.0",
+      "description": "Builds a new reusable skill from user-approved enterprise evidence when no catalogue skill is suitable.",
+      "status": "approved",
+      "path": "skills/skill-two",
+      "entrypoint": "SKILL.md",
+      "roles": [
+        "business-user",
+        "developer",
+        "seller",
+        "data-analyst",
+        "skill-author"
+      ],
+      "taskCategories": [
+        "skill-authoring"
+      ],
+      "keywords": [
+        "build",
+        "create",
+        "dataverse",
+        "m365",
+        "mcp",
+        "workiq"
+      ],
+      "runtime": {
+        "language": "none",
+        "dependencies": []
+      },
+      "capabilities": {
+        "network": [],
+        "filesystem": "read-write",
+        "shell": [],
+        "mcpServers": [
+          "dataverse",
+          "m365",
+          "workiq",
+          "other user-approved MCP servers"
+        ],
+        "authentication": [
+          "host-managed MCP access"
+        ]
+      },
+      "source": {
+        "type": "internal",
+        "repository": "https://github.com/WillEastbury/skillcli",
+        "license": "MIT"
+      },
+      "review": {
+        "state": "approved",
+        "reviewedBy": [
+          "Digital Native Skills Library maintainers"
+        ],
+        "reviewedAt": "2026-08-04"
+      }
+    },
+    {
+      "id": "prompt-quality-check",
+      "name": "Prompt Quality Check",
+      "version": "1.0.0",
+      "description": "Reviews a prompt for clarity, context, constraints, output shape, and safety before producing an improved version.",
+      "status": "approved",
+      "path": "skills/prompt-quality-check",
+      "entrypoint": "SKILL.md",
+      "roles": [
+        "business-user",
+        "developer",
+        "seller",
+        "data-analyst",
+        "skill-author"
+      ],
+      "taskCategories": [
+        "prompt-engineering"
+      ],
+      "keywords": [
+        "clarity",
+        "prompt",
+        "quality",
+        "review",
+        "rewrite"
+      ],
+      "runtime": {
+        "language": "python",
+        "dependencies": []
+      },
+      "capabilities": {
+        "network": [],
+        "filesystem": "none",
+        "shell": [],
+        "mcpServers": [],
+        "authentication": []
+      },
+      "source": {
+        "type": "internal",
+        "repository": "https://github.com/WillEastbury/skillcli",
+        "license": "MIT"
+      },
+      "review": {
+        "state": "approved",
+        "reviewedBy": [
+          "Digital Native Skills Library maintainers"
+        ],
+        "reviewedAt": "2026-08-03"
+      }
+    }
+  ]
+}

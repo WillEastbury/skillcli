@@ -1,0 +1,12 @@
+{
+  "duplicatePolicy": "highest-priority",
+  "sources": [
+    {
+      "id": "public",
+      "repository": "WillEastbury/skillcli",
+      "ref": "main",
+      "priority": 10,
+      "private": false
+    }
+  ]
+}

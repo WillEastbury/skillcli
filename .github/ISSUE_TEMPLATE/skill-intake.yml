@@ -1,0 +1,52 @@
+name: Skill intake
+description: Propose a reusable Markdown skill for governed review
+title: "[Skill intake] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use Skill One where possible. It creates a review branch containing the complete
+        proposal and links the immutable commit from the issue.
+
+  - type: input
+    id: skill-id
+    attributes:
+      label: Proposed skill ID
+      description: Lowercase kebab-case identifier.
+      placeholder: my-reusable-skill
+    validations:
+      required: true
+
+  - type: textarea
+    id: purpose
+    attributes:
+      label: Purpose and intended users
+      description: Explain the repeatable outcome, roles, and use cases.
+    validations:
+      required: true
+
+  - type: input
+    id: commit
+    attributes:
+      label: Immutable proposal commit
+      description: Link to the Skill One review-branch commit containing all proposed files.
+    validations:
+      required: true
+
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Declared requirements
+      description: List runtime, dependencies, network, filesystem, shell, MCP, and authentication needs.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Submission confirmation
+      options:
+        - label: The proposal contains no secrets, credentials, customer data, or personal data.
+          required: true
+        - label: The files are submitted for review and are not represented as approved.
+          required: true

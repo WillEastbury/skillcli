@@ -1,0 +1,26 @@
+{
+  "recordsPath": "skills",
+  "fields": {
+    "id": "id",
+    "name": "name",
+    "description": "description",
+    "taxonomy": "categories",
+    "score": "qualityScore",
+    "adoption": "adoption"
+  },
+  "taxonomyMap": {
+    "Prompting": "prompt-engineering",
+    "Software Development": "software-engineering",
+    "Data": "data-analysis",
+    "Sales": "sales-productivity"
+  },
+  "scoreScale": {
+    "target": "quality",
+    "min": 0,
+    "max": 5
+  },
+  "defaults": {
+    "roles": [],
+    "taskCategories": []
+  }
+}

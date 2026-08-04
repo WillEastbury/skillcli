@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/WillEastbury/skillcli/schemas/sources.schema.json",
+  "title": "skillcli catalogue sources",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "duplicatePolicy",
+    "sources"
+  ],
+  "properties": {
+    "duplicatePolicy": {
+      "const": "highest-priority"
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "repository",
+          "ref",
+          "priority",
+          "private"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "repository": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+          },
+          "ref": {
+            "type": "string",
+            "minLength": 1
+          },
+          "priority": {
+            "type": "integer"
+          },
+          "private": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}
