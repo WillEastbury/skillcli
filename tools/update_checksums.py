@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import stat
 import sys
 from pathlib import Path, PurePosixPath
@@ -19,6 +20,7 @@ WINDOWS_RESERVED = {
     *(f"com{index}" for index in range(1, 10)),
     *(f"lpt{index}" for index in range(1, 10)),
 }
+WINDOWS_SHORT_NAME = re.compile(r"^[^.]{1,6}~[0-9]+(?:\.[^.]{0,3})?$", re.IGNORECASE)
 
 
 def is_reparse_point(path: Path) -> bool:
@@ -47,6 +49,8 @@ def windows_key(value: str) -> str:
             raise ValueError(f"Windows path component has invalid characters: {value}")
         if part.split(".", 1)[0].casefold() in WINDOWS_RESERVED:
             raise ValueError(f"Windows reserved path component: {value}")
+        if WINDOWS_SHORT_NAME.fullmatch(part):
+            raise ValueError(f"Windows 8.3-style path component: {value}")
         keys.append(part.casefold())
     return "/".join(keys)
 

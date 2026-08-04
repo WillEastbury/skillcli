@@ -33,6 +33,7 @@ WINDOWS_RESERVED = {
     *(f"com{index}" for index in range(1, 10)),
     *(f"lpt{index}" for index in range(1, 10)),
 }
+WINDOWS_SHORT_NAME = re.compile(r"^[^.]{1,6}~[0-9]+(?:\.[^.]{0,3})?$", re.IGNORECASE)
 DEFAULT_CONFIG = {
     "sources": [
         {
@@ -68,6 +69,8 @@ def windows_key(value: str) -> str:
             raise ValueError(f"Windows path component has invalid characters: {value}")
         if part.split(".", 1)[0].casefold() in WINDOWS_RESERVED:
             raise ValueError(f"Windows reserved path component: {value}")
+        if WINDOWS_SHORT_NAME.fullmatch(part):
+            raise ValueError(f"Windows 8.3-style path component: {value}")
         keys.append(part.casefold())
     return "/".join(keys)
 
@@ -484,19 +487,6 @@ def replace_folder(
 ) -> tuple[str, str]:
     target = root / qualified_folder(qualified_id)
     reject_symlinks(target)
-    legacy = root / skill.metadata["id"]
-    migrated_legacy = False
-    if not target.exists() and legacy.exists():
-        reject_symlinks(legacy)
-        metadata = (
-            frontmatter(legacy / "SKILL.md")
-            if (legacy / "SKILL.md").is_file()
-            else {}
-        )
-        if metadata.get("skill-id") != skill.metadata["id"]:
-            return str(legacy), "legacy identity mismatch"
-        legacy.replace(target)
-        migrated_legacy = True
     existed = target.exists()
     if existed and not allow_existing:
         return str(target), "already installed"
@@ -524,7 +514,7 @@ def replace_folder(
                     or hashlib.sha256(local_file.read_bytes()).hexdigest() != digest
                 ):
                     return str(target), "local files modified"
-        elif not migrated_legacy:
+        else:
             return str(target), "missing source metadata"
         existing = {
             path.relative_to(target).as_posix()
@@ -552,6 +542,22 @@ def replace_folder(
             except ValueError as exc:
                 raise ValueError(f"destination escapes staging: {relative}") from exc
             destination.write_bytes(value)
+        identities: dict[tuple[int, int], str] = {}
+        expected_digests = {
+            record["path"]: record["sha256"] for record in skill.metadata["files"]
+        }
+        for relative, expected_digest in expected_digests.items():
+            staged_file = staged.joinpath(*safe_path(relative).parts)
+            actual_digest = hashlib.sha256(staged_file.read_bytes()).hexdigest()
+            if actual_digest != expected_digest:
+                raise ValueError(f"staged checksum mismatch: {relative}")
+            stat_result = staged_file.stat()
+            identity = (stat_result.st_dev, stat_result.st_ino)
+            if identity in identities:
+                raise ValueError(
+                    f"filesystem alias collision: {relative} and {identities[identity]}"
+                )
+            identities[identity] = relative
         receipt = {
             "qualifiedId": qualified_id,
             "source": {

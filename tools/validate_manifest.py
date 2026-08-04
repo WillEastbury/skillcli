@@ -26,6 +26,7 @@ WINDOWS_RESERVED = {
     *(f"com{index}" for index in range(1, 10)),
     *(f"lpt{index}" for index in range(1, 10)),
 }
+WINDOWS_SHORT_NAME = re.compile(r"^[^.]{1,6}~[0-9]+(?:\.[^.]{0,3})?$", re.IGNORECASE)
 
 
 def is_reparse_point(path: Path) -> bool:
@@ -50,6 +51,9 @@ def windows_key(value: str, label: str, errors: list[str]) -> str | None:
             return None
         if part.split(".", 1)[0].casefold() in WINDOWS_RESERVED:
             errors.append(f"{label} uses a Windows reserved name")
+            return None
+        if WINDOWS_SHORT_NAME.fullmatch(part):
+            errors.append(f"{label} uses a Windows 8.3-style name")
             return None
         keys.append(part.casefold())
     return "/".join(keys)
