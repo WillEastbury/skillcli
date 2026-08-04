@@ -3,7 +3,7 @@
 ## Install
 
 ```powershell
-irm -Headers @{Accept='application/vnd.github.raw+json';'User-Agent'='skillcli'} 'https://api.github.com/repos/WillEastbury/skillcli/contents/install.ps1?ref=main' | iex
+$p=Join-Path $env:TEMP 'skillcli-install.ps1'; iwr -Headers @{Accept='application/vnd.github.raw+json';'User-Agent'='skillcli'} 'https://api.github.com/repos/WillEastbury/skillcli/contents/install.ps1?ref=main' -OutFile $p; Unblock-File $p; & $p; Remove-Item $p
 ```
 
 `skillcli` is an MIT-licensed, agent-friendly CLI for searching and installing governed
@@ -24,7 +24,7 @@ skillcli update --all
 Layer a private catalogue over the public source:
 
 ```powershell
-$env:SKILLCLI_SOURCES_REPOSITORY='your-org/private-skills'; irm -Headers @{Accept='application/vnd.github.raw+json';'User-Agent'='skillcli'} 'https://api.github.com/repos/WillEastbury/skillcli/contents/install.ps1?ref=main' | iex
+$env:SKILLCLI_SOURCES_REPOSITORY='your-org/private-skills'; $p=Join-Path $env:TEMP 'skillcli-install.ps1'; iwr -Headers @{Accept='application/vnd.github.raw+json';'User-Agent'='skillcli'} 'https://api.github.com/repos/WillEastbury/skillcli/contents/install.ps1?ref=main' -OutFile $p; Unblock-File $p; & $p; Remove-Item $p
 ```
 
 The installer downloads `skillcli`, adds it to the user PATH, and installs Skill Zero
