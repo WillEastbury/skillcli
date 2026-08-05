@@ -2,6 +2,19 @@
 
 ## Install
 
+### Requirements
+
+| Scenario | Requirements |
+| --- | --- |
+| Native GitHub Copilot CLI marketplace | GitHub Copilot CLI signed in to GitHub |
+| Public `skillcli` catalogue | Python 3; no GitHub CLI or token required |
+| Private `skillcli` catalogue | Python 3 plus authenticated GitHub CLI (`gh`) with access to the private repository |
+| Windows installer | Windows PowerShell 5.1+ or PowerShell 7 |
+| macOS/Linux installer | Bash, Python 3, and `curl` |
+
+`gh` is only required when a configured catalogue is private. Public marketplaces and
+plugins are downloaded anonymously over HTTPS.
+
 ### GitHub Copilot CLI — native marketplace
 
 ```text
