@@ -49,17 +49,17 @@
   "files": [
     {
       "path": "scripts/skillcli.py",
-      "sha256": "3138ce2cbd00ac7d7fa845bf612736e61260d5c4033e37554d4f2ee6174d4e46",
+      "sha256": "a31966d0860214cd1b3d09c444609e6c04f5ed22a0f83868b91e31d0ac294a8d",
       "target": "tool"
     },
     {
       "path": "scripts/skillcli_core.py",
-      "sha256": "ce3d092fc958bfb0ac29bf7077fd6617ed0b84d59ed5352d256d11586eca5db6",
+      "sha256": "30846604b8323feb57aac716778286a09f1a1851593a6b96cfdc5d840d907044",
       "target": "tool"
     },
     {
       "path": "skills/skill-zero/SKILL.md",
-      "sha256": "da2c3a1e6bcadef718a678f18ae581c1850a20040a1fa86fc89715c00a0e2651",
+      "sha256": "9208dba4e8ce02b7cb3c9d3b37acb82afdd4c14fbc803bec4be05c89063bc4fd",
       "target": "skill"
     }
   ]

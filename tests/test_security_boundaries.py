@@ -455,6 +455,70 @@ class NativeCopilotAdapterTests(unittest.TestCase):
         )
 
 
+class MarketplaceRegistrationTests(unittest.TestCase):
+    def test_register_persists_source_and_is_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config_path = Path(temporary) / "sources.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "sources": [
+                            {
+                                "id": "public",
+                                "repository": "WillEastbury/skillcli",
+                                "ref": "main",
+                                "private": False,
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            source = SimpleNamespace(
+                config=SimpleNamespace(private=True),
+            )
+            globals_dict = CORE["register_source"].__globals__
+            originals = {
+                "probe_source": globals_dict["probe_source"],
+                "load_config": globals_dict["load_config"],
+                "write_config": globals_dict["write_config"],
+                "native_copilot_available": globals_dict["native_copilot_available"],
+            }
+            globals_dict["probe_source"] = lambda repository, ref: (
+                source,
+                "private-marketplace",
+            )
+            globals_dict["load_config"] = lambda: json.loads(
+                config_path.read_text(encoding="utf-8")
+            )
+
+            def write_config(value):
+                config_path.write_text(json.dumps(value), encoding="utf-8")
+                return config_path
+
+            globals_dict["write_config"] = write_config
+            globals_dict["native_copilot_available"] = lambda: False
+            try:
+                first = CORE["register_source"]("Owner/Private", "main")
+                second = CORE["register_source"]("Owner/Private", "main")
+            finally:
+                globals_dict.update(originals)
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            private_sources = [
+                item
+                for item in config["sources"]
+                if item["repository"] == "Owner/Private"
+            ]
+            self.assertEqual(len(private_sources), 1)
+            self.assertTrue(private_sources[0]["private"])
+            self.assertEqual(first["status"], "registered")
+            self.assertEqual(second["status"], "already registered")
+
+    def test_register_rejects_invalid_repository_name(self) -> None:
+        with self.assertRaisesRegex(ValueError, "OWNER/REPO"):
+            CORE["probe_source"]("../private")
+
+
 class MacOSDestinationTests(unittest.TestCase):
     def test_detects_macos_scout_and_cowork_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

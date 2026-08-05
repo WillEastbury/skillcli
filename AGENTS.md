@@ -22,6 +22,7 @@ skillcli install --skill <owner>/<repo>/<plugin-name>
 skillcli remove --skill <owner>/<repo>/<plugin-name>
 skillcli update --skill <owner>/<repo>/<plugin-name>
 skillcli update --all
+skillcli register <owner>/<repo>
 ```
 
 Skill Zero and Skill One orchestrate this CLI. Do not duplicate its source merging,
@@ -35,6 +36,8 @@ destination detection, installation, removal, or update logic in prompts.
 - IDs use `OWNER/REPO/plugin-name`, so separate repositories cannot collide.
 - An unavailable source produces a warning; accessible sources remain usable.
 - Never copy private skill content into this public repository.
+- The public installer must install only the public marketplace. Additional public or
+  private repositories are added explicitly with `skillcli register`.
 
 ## Native Copilot CLI
 

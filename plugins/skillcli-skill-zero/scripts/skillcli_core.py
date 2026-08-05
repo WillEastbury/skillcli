@@ -43,6 +43,7 @@ DEFAULT_CONFIG = {
         }
     ]
 }
+REPOSITORY_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 
 def safe_path(value: str) -> PurePosixPath:
@@ -143,7 +144,7 @@ def public_bytes(url: str) -> bytes:
         raise RuntimeError(f"GitHub HTTP {exc.code} for {url}") from exc
 
 
-def load_config() -> dict[str, Any]:
+def config_candidates() -> list[Path]:
     candidates = []
     configured = os.environ.get("SKILLCLI_CONFIG")
     if configured:
@@ -155,6 +156,11 @@ def load_config() -> dict[str, Any]:
         candidates.append(
             Path(local_app_data) / "DigitalNativeSkillsLibrary" / "sources.json"
         )
+    return candidates
+
+
+def load_config() -> dict[str, Any]:
+    candidates = config_candidates()
     for path in candidates:
         if path.is_file():
             value = json.loads(path.read_text(encoding="utf-8"))
@@ -162,6 +168,29 @@ def load_config() -> dict[str, Any]:
                 raise ValueError(f"source configuration must be an object: {path}")
             return value
     return DEFAULT_CONFIG
+
+
+def writable_config_path() -> Path:
+    candidates = config_candidates()
+    for path in candidates:
+        if path.is_file():
+            return path
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        return Path(local_app_data) / "skillcli" / "sources.json"
+    return Path.home() / ".local" / "share" / "skillcli" / "sources.json"
+
+
+def write_config(config: dict[str, Any]) -> Path:
+    path = writable_config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(
+        json.dumps(config, indent=2, ensure_ascii=True) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(path)
+    return path
 
 
 @dataclass(frozen=True)
@@ -350,6 +379,98 @@ class Catalogues:
             ],
         }
         return (json.dumps(value, indent=2) + "\n").encode("utf-8")
+
+
+def probe_source(repository: str, ref: str = "main") -> tuple[Source, str]:
+    parts = repository.split("/")
+    if (
+        not REPOSITORY_PATTERN.fullmatch(repository)
+        or len(parts) != 2
+        or any(part in {".", ".."} for part in parts)
+    ):
+        raise ValueError("repository must use OWNER/REPO")
+    failures = []
+    for private in (False, True):
+        source = Source(
+            SourceConfig(
+                id="pending",
+                repository=repository,
+                ref=ref,
+                private=private,
+            )
+        )
+        try:
+            catalogue = source.read_json("catalogue.json")
+            marketplace = source.read_json(".github/plugin/marketplace.json")
+        except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
+            failures.append(str(exc))
+            continue
+        if catalogue.get("library", {}).get("namespace") != repository:
+            raise ValueError("catalogue namespace does not match repository")
+        marketplace_name = marketplace.get("name")
+        plugins = marketplace.get("plugins")
+        if not isinstance(marketplace_name, str) or not isinstance(plugins, list):
+            raise ValueError("repository has an invalid plugin marketplace")
+        return source, marketplace_name
+    raise RuntimeError(
+        f"cannot access a valid marketplace at {repository}: " + "; ".join(failures)
+    )
+
+
+def register_source(repository: str, ref: str = "main") -> dict[str, str]:
+    source, marketplace_name = probe_source(repository, ref)
+    config = load_config()
+    sources = config.get("sources")
+    if not isinstance(sources, list):
+        raise ValueError("source configuration is invalid")
+    source_id = marketplace_name
+    existing = next(
+        (
+            item
+            for item in sources
+            if isinstance(item, dict) and item.get("repository") == repository
+        ),
+        None,
+    )
+    record = {
+        "id": source_id,
+        "repository": repository,
+        "ref": ref,
+        "private": source.config.private,
+    }
+    if existing is None:
+        used_ids = {
+            item.get("id")
+            for item in sources
+            if isinstance(item, dict) and isinstance(item.get("id"), str)
+        }
+        if source_id in used_ids:
+            source_id = repository.replace("/", "-").casefold()
+            record["id"] = source_id
+        sources.append(record)
+        status = "registered"
+    else:
+        existing.update(record)
+        status = "already registered"
+    path = write_config(config)
+    native_status = "not available"
+    if native_copilot_available():
+        result = run(["copilot", "plugin", "marketplace", "list"], timeout=120)
+        listed = result.stdout.decode("utf-8", errors="replace").casefold()
+        if marketplace_name.casefold() in listed:
+            native_status = "already registered"
+        else:
+            specification = repository if ref == "main" else f"{repository}#{ref}"
+            run_copilot(["plugin", "marketplace", "add", specification])
+            native_status = "registered"
+    return {
+        "repository": repository,
+        "marketplace": marketplace_name,
+        "visibility": "private" if source.config.private else "public",
+        "status": status,
+        "nativeCopilot": native_status,
+        "config": str(path),
+    }
 
 
 def one_drive_root() -> Path | None:

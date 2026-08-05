@@ -51,12 +51,19 @@ skillcli update --skill WillEastbury/skillcli/skillcli-prompt-quality-check
 skillcli update --all
 ```
 
-## Private downstream install
+## Register another marketplace
 
-Layer a private catalogue over the public source:
+```text
+skillcli register OWNER/REPO
+```
 
-```powershell
-$env:SKILLCLI_PRIVATE_MODE='1'; $env:SKILLCLI_SOURCES_REPOSITORY='your-org/private-skills'; $p=Join-Path $env:TEMP 'skillcli-install.ps1'; iwr -UseBasicParsing -Headers @{Accept='application/vnd.github.raw+json';'User-Agent'='skillcli'} 'https://api.github.com/repos/WillEastbury/skillcli/contents/install.ps1?ref=main' -OutFile $p; Unblock-File $p; & $p; Remove-Item $p
+The public installer installs only the public marketplace. Private or additional
+marketplaces are added later with `register`.
+
+Example:
+
+```text
+skillcli register wieastbu_microsoft/DigitalNativeSkillsLibrary
 ```
 
 The installer downloads `skillcli`, adds it to the user PATH, and installs Skill Zero
