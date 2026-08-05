@@ -115,6 +115,7 @@ it can continue with the repository's governed issue and review workflow.
 python tools\validate_manifest.py
 python tools\render_readme.py
 python tools\render_readme.py --check
+python -m unittest discover -s tests -v
 ```
 
 External inventories can be transformed into review candidates with
