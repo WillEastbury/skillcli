@@ -1,7 +1,7 @@
 ---
 name: "Skill One: GitHub Intake"
 description: "Submits a proposed Markdown skill and supporting files on a review branch and opens a governed GitHub issue."
-version: "3.0.0"
+version: "4.0.0"
 skill-id: "skill-one"
 ---
 
@@ -16,8 +16,9 @@ Submission does not approve, publish, merge, or install the skill.
 
 ## Procedure
 
-1. Run `skillcli search --role skill-author --query "<proposed purpose>"` to check for an
-   existing approved skill.
+1. Run `skillcli search --role skill-author --query "<proposed purpose>"`, or use native
+   `copilot plugin marketplace browse <marketplace> --json`, to check for an existing
+   approved plugin.
 2. If the user selects an existing result, run
    `skillcli install --skill <owner>/<repo>/<skill-id>` and stop the submission flow.
 3. Otherwise confirm the target repository and proposed lowercase kebab-case skill ID.

@@ -1,5 +1,8 @@
 /skills.json @WillEastbury
+/catalogue.json @WillEastbury
 /skill-sources.json @WillEastbury
+/plugins/ @WillEastbury
+/.github/plugin/ @WillEastbury
 /schemas/ @WillEastbury
 /skills/ @WillEastbury
 /tools/ @WillEastbury

@@ -1,0 +1,48 @@
+{
+  "schemaVersion": "1.0.0",
+  "skillId": "skill-two",
+  "skillRoot": "skills/skill-two",
+  "roles": [
+    "business-user",
+    "developer",
+    "seller",
+    "data-analyst",
+    "skill-author"
+  ],
+  "taskCategories": [
+    "skill-authoring"
+  ],
+  "runtime": {
+    "language": "none",
+    "dependencies": []
+  },
+  "capabilities": {
+    "network": [],
+    "filesystem": "read-write",
+    "shell": [],
+    "mcpServers": [
+      "dataverse",
+      "m365",
+      "workiq",
+      "other user-approved MCP servers"
+    ],
+    "authentication": [
+      "host-managed MCP access"
+    ]
+  },
+  "review": {
+    "state": "approved",
+    "reviewedBy": [
+      "skillcli maintainers"
+    ],
+    "reviewedAt": "2026-08-05"
+  },
+  "toolFiles": [],
+  "files": [
+    {
+      "path": "skills/skill-two/SKILL.md",
+      "sha256": "725e4afdc3c7dd9d29fe6ab5d7769177f8c27200a1d7a8675ba375b9a75a7ad7",
+      "target": "skill"
+    }
+  ]
+}

@@ -21,7 +21,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Validate catalogue and skill folders
+      - name: Validate marketplace and plugin packages
         run: python tools/validate_manifest.py
 
       - name: Install JSON Schema validator
@@ -39,10 +39,18 @@ jobs:
           source_schema=json.loads(Path('schemas/sources.schema.json').read_text());
           sources=json.loads(Path('skill-sources.json').read_text());
           Draft202012Validator(source_schema, format_checker=checker).validate(sources);
+          catalogue_schema=json.loads(Path('schemas/catalogue.schema.json').read_text());
+          catalogue=json.loads(Path('catalogue.json').read_text());
+          Draft202012Validator(catalogue_schema, format_checker=checker).validate(catalogue);
+          plugin_schema=json.loads(Path('schemas/skillcli-plugin.schema.json').read_text());
+          sidecars=sorted(Path('plugins').glob('*/skillcli.json'));
+          [Draft202012Validator(plugin_schema, format_checker=checker).validate(json.loads(path.read_text())) for path in sidecars];
           print('JSON Schema validation passed')"
 
-      - name: Check generated Markdown catalogue
-        run: python tools/render_readme.py --check
+      - name: Check generated marketplace outputs
+        run: |
+          python tools/validate_manifest.py
+          python tools/render_readme.py --check
 
       - name: Run security regression tests
         run: python -m unittest discover -s tests -v

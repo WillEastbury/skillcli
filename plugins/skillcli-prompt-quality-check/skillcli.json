@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "1.0.0",
+  "skillId": "prompt-quality-check",
+  "skillRoot": "skills/prompt-quality-check",
+  "roles": [
+    "business-user",
+    "developer",
+    "seller",
+    "data-analyst",
+    "skill-author"
+  ],
+  "taskCategories": [
+    "prompt-engineering"
+  ],
+  "runtime": {
+    "language": "python",
+    "dependencies": []
+  },
+  "capabilities": {
+    "network": [],
+    "filesystem": "none",
+    "shell": [],
+    "mcpServers": [],
+    "authentication": []
+  },
+  "review": {
+    "state": "approved",
+    "reviewedBy": [
+      "skillcli maintainers"
+    ],
+    "reviewedAt": "2026-08-05"
+  },
+  "toolFiles": [],
+  "files": [
+    {
+      "path": "skills/prompt-quality-check/SKILL.md",
+      "sha256": "ae498041bd592c6dc06396ac345586e454babd9ed7db565fcc239ae27da28591",
+      "target": "skill"
+    },
+    {
+      "path": "skills/prompt-quality-check/src/prompt_quality.py",
+      "sha256": "e94c86842094f3588be4d92770f94140054a7f1b1d8fbb9b6a9a5b96cecc5594",
+      "target": "skill"
+    }
+  ]
+}

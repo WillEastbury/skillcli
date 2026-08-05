@@ -13,9 +13,9 @@ The agent remains the user interface. The CLI provides four deterministic comman
 
 ```text
 skillcli search --role seller --query "prompt quality"
-skillcli install --skill WillEastbury/skillcli/prompt-quality-check
-skillcli remove --skill WillEastbury/skillcli/prompt-quality-check
-skillcli update --skill WillEastbury/skillcli/prompt-quality-check
+skillcli install --skill WillEastbury/skillcli/skillcli-prompt-quality-check
+skillcli remove --skill WillEastbury/skillcli/skillcli-prompt-quality-check
+skillcli update --skill WillEastbury/skillcli/skillcli-prompt-quality-check
 skillcli update --all
 ```
 
@@ -75,13 +75,32 @@ and runs install/remove/update only after an explicit user request.
 Skill One runs a search first to avoid duplicate submissions. If no existing skill fits,
 it can continue with the repository's governed issue and review workflow.
 
+## Native Copilot CLI marketplace
+
+```text
+/plugin marketplace add WillEastbury/skillcli
+/plugin install skillcli-skill-zero@skillcli
+```
+
+When native Copilot CLI is detected, `skillcli install`, `update`, and `remove` delegate
+to these native plugin commands. Scout and Co-Work use the same plugin packages through
+filesystem adapters.
+
 ## Catalogue format
 
-`skills.json` is the source of truth. Each approved entry points to a folder containing
-`SKILL.md` and optional supporting files. See:
+The native marketplace structure is authoritative:
+
+- `.github/plugin/marketplace.json`
+- `plugins/<plugin-name>/plugin.json`
+- `plugins/<plugin-name>/skillcli.json`
+- `plugins/<plugin-name>/skills/...`
+
+`skills.json` is generated as a temporary compatibility/search index. See:
 
 - [`schemas/skills.schema.json`](schemas/skills.schema.json)
 - [`schemas/sources.schema.json`](schemas/sources.schema.json)
+- [`schemas/catalogue.schema.json`](schemas/catalogue.schema.json)
+- [`schemas/skillcli-plugin.schema.json`](schemas/skillcli-plugin.schema.json)
 - [`SKILLS.md`](SKILLS.md)
 
 ## Core skills
@@ -89,9 +108,9 @@ it can continue with the repository's governed issue and review workflow.
 <!-- BEGIN GENERATED SKILL CATALOG -->
 | ID | Name | Version | Status | Requirements | Description |
 | --- | --- | --- | --- | --- | --- |
-| `WillEastbury/skillcli/skill-one` | Skill One: GitHub Intake | 3.0.0 | approved | network: github.com, api.github.com; filesystem: read-write; shell: git, skillcli; auth: host-managed GitHub access | Submits a proposed Markdown skill and supporting files on a review branch and opens a governed GitHub issue. |
-| `WillEastbury/skillcli/skill-two` | Skill Two: Guided Skill Builder | 2.0.1 | approved | filesystem: read-write; MCP: dataverse, m365, workiq, other user-approved MCP servers; auth: host-managed MCP access | Builds a new reusable skill from user-approved enterprise evidence when no catalogue skill is suitable. |
-| `WillEastbury/skillcli/skill-zero` | Skill Zero: Library Browser | 5.0.0 | approved | network: github.com, api.github.com; filesystem: read-write; shell: gh, skillcli; auth: host-managed GitHub access | Orchestrates the managed skillcli command to search, install, remove, and update approved skills across detected agent hosts. |
+| `WillEastbury/skillcli/skillcli-skill-one` | Skill One: GitHub Intake | 4.0.0 | approved | network: github.com, api.github.com; filesystem: read-write; shell: git, skillcli; auth: host-managed GitHub access | Submits a proposed Markdown skill and supporting files on a review branch and opens a governed GitHub issue. |
+| `WillEastbury/skillcli/skillcli-skill-two` | Skill Two: Guided Skill Builder | 2.0.1 | approved | filesystem: read-write; MCP: dataverse, m365, workiq, other user-approved MCP servers; auth: host-managed MCP access | Builds a new reusable skill from user-approved enterprise evidence when no catalogue skill is suitable. |
+| `WillEastbury/skillcli/skillcli-skill-zero` | Skill Zero: Library Browser | 6.0.0 | approved | network: github.com, api.github.com; filesystem: read-write; shell: copilot, gh, skillcli; auth: host-managed GitHub access | Orchestrates the managed skillcli command to search, install, remove, and update approved skills across detected agent hosts. |
 <!-- END GENERATED SKILL CATALOG -->
 
 ## Governance
@@ -113,6 +132,7 @@ it can continue with the repository's governed issue and review workflow.
 
 ```powershell
 python tools\validate_manifest.py
+python tools\render_marketplace.py
 python tools\render_readme.py
 python tools\render_readme.py --check
 python -m unittest discover -s tests -v

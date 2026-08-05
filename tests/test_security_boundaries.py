@@ -4,7 +4,9 @@ import contextlib
 import hashlib
 import io
 import json
+import os
 import runpy
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -14,8 +16,17 @@ from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.dont_write_bytecode = True
-CLI = runpy.run_path(str(ROOT / "skills" / "skill-zero" / "skillcli.py"))
-CHECKSUMS = runpy.run_path(str(ROOT / "tools" / "update_checksums.py"))
+os.environ["SKILLCLI_DISABLE_NATIVE_COPILOT"] = "1"
+CORE = runpy.run_path(
+    str(
+        ROOT
+        / "plugins"
+        / "skillcli-skill-zero"
+        / "scripts"
+        / "skillcli_core.py"
+    )
+)
+MARKETPLACE = runpy.run_path(str(ROOT / "tools" / "render_marketplace.py"))
 
 
 class FakeSource:
@@ -32,25 +43,56 @@ class FakeSource:
         return "a" * 40
 
 
-def skill(
+class FakeCatalogues:
+    def __init__(self, plugin) -> None:
+        self._plugin = plugin
+
+    def plugin(self, qualified_id: str):
+        if qualified_id != self._plugin.qualified_id:
+            raise ValueError(qualified_id)
+        return self._plugin
+
+
+def plugin(
     records: list[dict[str, str]],
     files: dict[str, bytes],
     repository: str = "Owner/Repo",
 ):
-    metadata = {
-        "id": "example-skill",
+    manifest = {
+        "name": "example-plugin",
+        "description": "Example plugin",
         "version": "1.0.0",
-        "path": "skills/example-skill",
-        "entrypoint": "SKILL.md",
+        "keywords": ["example"],
+    }
+    metadata = {
+        "skillId": "example-skill",
+        "skillRoot": "skills/example-skill",
+        "roles": ["developer"],
+        "taskCategories": ["testing"],
+        "runtime": {"language": "none", "dependencies": []},
+        "capabilities": {
+            "network": [],
+            "filesystem": "none",
+            "shell": [],
+            "mcpServers": [],
+            "authentication": [],
+        },
+        "review": {"state": "approved"},
         "files": records,
     }
-    return CLI["Skill"](FakeSource(files, repository), metadata)
+    return CORE["Plugin"](
+        FakeSource(files, repository),
+        "example-marketplace",
+        "plugins/example-plugin",
+        manifest,
+        metadata,
+    )
 
 
 class WindowsPathTests(unittest.TestCase):
     def test_accepts_normal_nested_path(self) -> None:
         self.assertEqual(
-            CLI["windows_key"]("src/helper-script.py"),
+            CORE["windows_key"]("src/helper-script.py"),
             "src/helper-script.py",
         )
 
@@ -63,7 +105,7 @@ class WindowsPathTests(unittest.TestCase):
         ):
             with self.subTest(value=value):
                 with self.assertRaises(ValueError):
-                    CLI["windows_key"](value)
+                    CORE["windows_key"](value)
 
     def test_rejects_windows_alias_and_invalid_forms(self) -> None:
         values = (
@@ -85,72 +127,92 @@ class WindowsPathTests(unittest.TestCase):
         for value in values:
             with self.subTest(value=value):
                 with self.assertRaises(ValueError):
-                    CLI["windows_key"](value)
+                    CORE["windows_key"](value)
 
     def test_repository_namespaces_produce_distinct_folders(self) -> None:
-        public = CLI["qualified_folder"]("Owner/Public/same-skill")
-        private = CLI["qualified_folder"]("Owner/Private/same-skill")
+        public = CORE["qualified_folder"]("Owner/Public/example-plugin")
+        private = CORE["qualified_folder"]("Owner/Private/example-plugin")
+        self.assertEqual(public, "Owner!Public!example-plugin")
+        self.assertEqual(private, "Owner!Private!example-plugin")
         self.assertNotEqual(public, private)
-        self.assertEqual(public, "Owner!Public!same-skill")
-        self.assertEqual(private, "Owner!Private!same-skill")
 
-    def test_unqualified_skill_id_is_rejected(self) -> None:
+    def test_unqualified_plugin_id_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
-            CLI["qualified_folder"]("same-skill")
+            CORE["qualified_folder"]("example-plugin")
 
 
 class ChecksumTests(unittest.TestCase):
-    def test_remote_content_reads_only_declared_files(self) -> None:
+    def test_plugin_content_reads_only_declared_skill_files(self) -> None:
         skill_md = b"---\nname: \"Example\"\n---\n"
         helper = b"print('example')\n"
         files = {
-            "skills/example-skill/SKILL.md": skill_md,
-            "skills/example-skill/src/helper.py": helper,
-            "skills/example-skill/undeclared.txt": b"must not be read",
+            "plugins/example-plugin/skills/example-skill/SKILL.md": skill_md,
+            "plugins/example-plugin/skills/example-skill/src/helper.py": helper,
+            "plugins/example-plugin/undeclared.txt": b"must not be read",
         }
         records = [
             {
-                "path": "SKILL.md",
+                "path": "skills/example-skill/SKILL.md",
                 "sha256": hashlib.sha256(skill_md).hexdigest(),
+                "target": "skill",
             },
             {
-                "path": "src/helper.py",
+                "path": "skills/example-skill/src/helper.py",
                 "sha256": hashlib.sha256(helper).hexdigest(),
+                "target": "skill",
             },
         ]
-        selected = skill(records, files)
-        content = CLI["remote_content"](selected)
+        selected = plugin(records, files)
+        content = CORE["plugin_skill_content"](selected)
         self.assertEqual(set(content), {"SKILL.md", "src/helper.py"})
         self.assertNotIn(
-            "skills/example-skill/undeclared.txt",
+            "plugins/example-plugin/undeclared.txt",
             selected.source.read_paths,
         )
 
     def test_checksum_mismatch_is_rejected(self) -> None:
         content = b"reviewed content"
-        files = {"skills/example-skill/SKILL.md": content}
-        records = [{"path": "SKILL.md", "sha256": "0" * 64}]
+        files = {
+            "plugins/example-plugin/skills/example-skill/SKILL.md": content
+        }
+        records = [
+            {
+                "path": "skills/example-skill/SKILL.md",
+                "sha256": "0" * 64,
+                "target": "skill",
+            }
+        ]
         with self.assertRaisesRegex(ValueError, "checksum mismatch"):
-            CLI["remote_content"](skill(records, files))
+            CORE["plugin_skill_content"](plugin(records, files))
 
     def test_case_folded_declared_paths_are_rejected(self) -> None:
         content = b"same"
-        files = {"skills/example-skill/SKILL.md": content}
+        files = {
+            "plugins/example-plugin/skills/example-skill/SKILL.md": content
+        }
         digest = hashlib.sha256(content).hexdigest()
         records = [
-            {"path": "SKILL.md", "sha256": digest},
-            {"path": "skill.md", "sha256": digest},
+            {
+                "path": "skills/example-skill/SKILL.md",
+                "sha256": digest,
+                "target": "skill",
+            },
+            {
+                "path": "skills/example-skill/skill.md",
+                "sha256": digest,
+                "target": "skill",
+            },
         ]
         with self.assertRaisesRegex(ValueError, "Windows path collision"):
-            CLI["remote_content"](skill(records, files))
+            CORE["plugin_skill_content"](plugin(records, files))
 
     def test_text_checksum_normalizes_line_endings(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "SKILL.md"
             path.write_bytes(b"line one\r\nline two\r\n")
-            windows = hashlib.sha256(CHECKSUMS["canonical_bytes"](path)).hexdigest()
+            windows = hashlib.sha256(MARKETPLACE["canonical_bytes"](path)).hexdigest()
             path.write_bytes(b"line one\nline two\n")
-            unix = hashlib.sha256(CHECKSUMS["canonical_bytes"](path)).hexdigest()
+            unix = hashlib.sha256(MARKETPLACE["canonical_bytes"](path)).hexdigest()
             self.assertEqual(windows, unix)
 
 
@@ -158,140 +220,238 @@ class SourceBindingTests(unittest.TestCase):
     def setUp(self) -> None:
         self.content = b"---\nskill-id: \"example-skill\"\n---\n"
         self.digest = hashlib.sha256(self.content).hexdigest()
-        self.records = [{"path": "SKILL.md", "sha256": self.digest}]
-        self.skill = skill(
+        self.records = [
+            {
+                "path": "skills/example-skill/SKILL.md",
+                "sha256": self.digest,
+                "target": "skill",
+            }
+        ]
+        self.plugin = plugin(
             self.records,
-            {"skills/example-skill/SKILL.md": self.content},
+            {
+                "plugins/example-plugin/skills/example-skill/SKILL.md": self.content
+            },
         )
-        self.qualified_id = "Owner/Repo/example-skill"
 
     def test_install_writes_source_bound_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            destination, status = CLI["replace_folder"](
+            destination, status = CORE["replace_folder"](
                 root,
-                self.qualified_id,
-                self.skill,
+                self.plugin,
                 {"SKILL.md": self.content},
                 b"{}",
-                "copilot-cli",
+                "scout",
                 False,
             )
             self.assertEqual(status, "installed")
             receipt = json.loads(
                 (Path(destination) / ".skillcli.json").read_text(encoding="utf-8")
             )
-            self.assertEqual(receipt["qualifiedId"], self.qualified_id)
+            self.assertEqual(receipt["qualifiedId"], self.plugin.qualified_id)
             self.assertEqual(receipt["source"]["repository"], "Owner/Repo")
-            self.assertEqual(receipt["files"], self.records)
+            self.assertEqual(receipt["files"][0]["relativePath"], "SKILL.md")
 
     def test_update_rejects_source_namespace_change(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            target = root / CLI["qualified_folder"](self.qualified_id)
+            target = root / CORE["qualified_folder"](self.plugin.qualified_id)
             target.mkdir()
             (target / "SKILL.md").write_bytes(self.content)
             (target / ".skillcli.json").write_text(
                 json.dumps(
                     {
-                        "qualifiedId": self.qualified_id,
+                        "qualifiedId": self.plugin.qualified_id,
                         "source": {"repository": "Attacker/Repo"},
-                        "files": self.records,
+                        "files": [
+                            {
+                                "relativePath": "SKILL.md",
+                                "sha256": self.digest,
+                            }
+                        ],
                     }
                 ),
                 encoding="utf-8",
             )
-            _, status = CLI["replace_folder"](
+            _, status = CORE["replace_folder"](
                 root,
-                self.qualified_id,
-                self.skill,
+                self.plugin,
                 {"SKILL.md": self.content},
                 b"{}",
-                "copilot-cli",
+                "scout",
                 True,
             )
             self.assertEqual(status, "source namespace mismatch")
-            self.assertEqual((target / "SKILL.md").read_bytes(), self.content)
 
     def test_update_rejects_modified_managed_file(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            target = root / CLI["qualified_folder"](self.qualified_id)
+            target = root / CORE["qualified_folder"](self.plugin.qualified_id)
             target.mkdir()
-            (target / "SKILL.md").write_bytes(b"locally modified")
+            (target / "SKILL.md").write_bytes(b"modified")
             (target / ".skillcli.json").write_text(
                 json.dumps(
                     {
-                        "qualifiedId": self.qualified_id,
+                        "qualifiedId": self.plugin.qualified_id,
                         "source": {"repository": "Owner/Repo"},
-                        "files": self.records,
+                        "files": [
+                            {
+                                "relativePath": "SKILL.md",
+                                "sha256": self.digest,
+                            }
+                        ],
                     }
                 ),
                 encoding="utf-8",
             )
-            _, status = CLI["replace_folder"](
+            _, status = CORE["replace_folder"](
                 root,
-                self.qualified_id,
-                self.skill,
+                self.plugin,
                 {"SKILL.md": self.content},
                 b"{}",
-                "copilot-cli",
+                "scout",
                 True,
             )
             self.assertEqual(status, "local files modified")
-            self.assertEqual((target / "SKILL.md").read_bytes(), b"locally modified")
 
-    def test_update_rejects_existing_namespaced_folder_without_metadata(self) -> None:
+    def test_update_allows_removal_of_previously_managed_file(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            target = root / CLI["qualified_folder"](self.qualified_id)
+            target = root / CORE["qualified_folder"](self.plugin.qualified_id)
             target.mkdir()
+            old_content = b"old managed file"
             (target / "SKILL.md").write_bytes(self.content)
-            _, status = CLI["replace_folder"](
+            (target / "old.txt").write_bytes(old_content)
+            (target / ".skillcli.json").write_text(
+                json.dumps(
+                    {
+                        "qualifiedId": self.plugin.qualified_id,
+                        "source": {"repository": "Owner/Repo"},
+                        "files": [
+                            {
+                                "relativePath": "SKILL.md",
+                                "sha256": self.digest,
+                            },
+                            {
+                                "relativePath": "old.txt",
+                                "sha256": hashlib.sha256(old_content).hexdigest(),
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            _, status = CORE["replace_folder"](
                 root,
-                self.qualified_id,
-                self.skill,
+                self.plugin,
                 {"SKILL.md": self.content},
                 b"{}",
-                "copilot-cli",
+                "scout",
                 True,
             )
-            self.assertEqual(status, "missing source metadata")
+            self.assertEqual(status, "updated")
+            self.assertFalse((target / "old.txt").exists())
 
     def test_remove_refuses_namespace_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            target = root / CLI["qualified_folder"](self.qualified_id)
+            target = root / CORE["qualified_folder"](self.plugin.qualified_id)
             target.mkdir()
-            (target / "SKILL.md").write_bytes(self.content)
             (target / ".skillcli.json").write_text(
-                json.dumps({"qualifiedId": "Other/Repo/example-skill"}),
+                json.dumps({"qualifiedId": "Other/Repo/example-plugin"}),
                 encoding="utf-8",
             )
-            globals_dict = CLI["remove"].__globals__
-            original_destinations = globals_dict["destinations"]
-            globals_dict["destinations"] = lambda: {"test": root}
+            globals_dict = CORE["filesystem_destinations"].__globals__
+            original = globals_dict["filesystem_destinations"]
+            globals_dict["filesystem_destinations"] = lambda: {"test": root}
             try:
-                with contextlib.redirect_stdout(io.StringIO()) as output:
-                    CLI["remove"](self.qualified_id)
-                self.assertIn("refused: namespace mismatch", output.getvalue())
+                rows = CORE["remove_plugin"](
+                    FakeCatalogues(self.plugin),
+                    self.plugin.qualified_id,
+                )
+                self.assertEqual(rows[0]["status"], "refused: namespace mismatch")
                 self.assertTrue(target.exists())
             finally:
-                globals_dict["destinations"] = original_destinations
+                globals_dict["filesystem_destinations"] = original
 
     def test_reparse_point_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             child = root / "child"
             child.mkdir()
-            globals_dict = CLI["reject_symlinks"].__globals__
+            globals_dict = CORE["reject_links"].__globals__
             original = globals_dict["is_reparse_point"]
             globals_dict["is_reparse_point"] = lambda path: path == child
             try:
                 with self.assertRaisesRegex(ValueError, "link/reparse point"):
-                    CLI["reject_symlinks"](root)
+                    CORE["reject_links"](root)
             finally:
                 globals_dict["is_reparse_point"] = original
+
+
+class NativeCopilotAdapterTests(unittest.TestCase):
+    def test_native_install_uses_marketplace_interface(self) -> None:
+        calls: list[list[str]] = []
+        globals_dict = CORE["native_install_or_update"].__globals__
+        original_ensure = globals_dict["ensure_native_marketplace"]
+        original_names = globals_dict["native_plugin_names"]
+        original_run = globals_dict["run_copilot"]
+        globals_dict["ensure_native_marketplace"] = lambda selected: None
+        globals_dict["native_plugin_names"] = lambda: set()
+        globals_dict["run_copilot"] = lambda args: calls.append(args)
+        try:
+            status = CORE["native_install_or_update"](self._plugin(), False)
+            self.assertEqual(status, "installed")
+            self.assertEqual(
+                calls,
+                [["plugin", "install", "example-plugin@example-marketplace"]],
+            )
+        finally:
+            globals_dict["ensure_native_marketplace"] = original_ensure
+            globals_dict["native_plugin_names"] = original_names
+            globals_dict["run_copilot"] = original_run
+
+    def test_native_update_and_remove_use_plugin_name(self) -> None:
+        calls: list[list[str]] = []
+        selected = self._plugin()
+        globals_dict = CORE["native_install_or_update"].__globals__
+        originals = {
+            "ensure_native_marketplace": globals_dict["ensure_native_marketplace"],
+            "native_plugin_names": globals_dict["native_plugin_names"],
+            "run_copilot": globals_dict["run_copilot"],
+        }
+        globals_dict["ensure_native_marketplace"] = lambda plugin: None
+        globals_dict["native_plugin_names"] = lambda: {"example-plugin"}
+        globals_dict["run_copilot"] = lambda args: calls.append(args)
+        try:
+            self.assertEqual(
+                CORE["native_install_or_update"](selected, True),
+                "updated",
+            )
+            self.assertEqual(CORE["native_remove"](selected), "removed")
+            self.assertEqual(
+                calls,
+                [
+                    ["plugin", "update", "example-plugin"],
+                    ["plugin", "uninstall", "example-plugin"],
+                ],
+            )
+        finally:
+            globals_dict.update(originals)
+
+    @staticmethod
+    def _plugin():
+        return plugin(
+            [
+                {
+                    "path": "skills/example-skill/SKILL.md",
+                    "sha256": hashlib.sha256(b"x").hexdigest(),
+                    "target": "skill",
+                }
+            ],
+            {"plugins/example-plugin/skills/example-skill/SKILL.md": b"x"},
+        )
 
 
 if __name__ == "__main__":

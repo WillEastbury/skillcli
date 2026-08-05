@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 from typing import Any
 
-from validate_manifest import validate_repository
+from render_marketplace import build
 
 
 START_MARKER = "<!-- BEGIN GENERATED SKILL CATALOG -->"
@@ -85,17 +84,12 @@ def main() -> int:
     args = parser.parse_args()
 
     root = Path(__file__).resolve().parents[1]
-    manifest, errors = validate_repository(root)
-    if errors:
-        for error in errors:
-            print(f"- {error}", file=sys.stderr)
-        return 1
-    assert manifest is not None
+    manifest = build(root, update=False)
 
     readme_path = root / "README.md"
     skills_path = root / "SKILLS.md"
     current_readme = readme_path.read_text(encoding="utf-8")
-    core_ids = {"skill-zero", "skill-one", "skill-two"}
+    core_ids = {"skillcli-skill-zero", "skillcli-skill-one", "skillcli-skill-two"}
     core = [skill for skill in manifest["skills"] if skill["id"] in core_ids]
     expected_readme = replace_catalog(
         current_readme,
