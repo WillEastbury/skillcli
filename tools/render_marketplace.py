@@ -154,10 +154,12 @@ def build(root: Path, update: bool) -> dict[str, Any]:
     if not isinstance(entries, list) or not entries:
         raise ValueError("marketplace.json must contain plugins")
     generated_skills = []
+    listed_plugin_paths = set()
     for entry in entries:
         if not isinstance(entry, dict) or not isinstance(entry.get("source"), str):
             raise ValueError("only local string plugin sources are supported")
         plugin_path = safe_path(entry["source"]).as_posix()
+        listed_plugin_paths.add(plugin_path)
         plugin_root = root.joinpath(*PurePosixPath(plugin_path).parts)
         plugin_manifest_path = plugin_root / "plugin.json"
         metadata_path = plugin_root / "skillcli.json"
@@ -215,6 +217,21 @@ def build(root: Path, update: bool) -> dict[str, Any]:
                 "files": skill_files,
             }
         )
+    for metadata_path in sorted((root / "plugins").glob("*/skillcli.json")):
+        plugin_root = metadata_path.parent
+        relative_plugin = plugin_root.relative_to(root).as_posix()
+        if relative_plugin in listed_plugin_paths:
+            continue
+        metadata = json_object(metadata_path)
+        records = plugin_records(plugin_root, metadata)
+        if update:
+            metadata["files"] = records
+            metadata_path.write_text(
+                json.dumps(metadata, indent=2, ensure_ascii=True) + "\n",
+                encoding="utf-8",
+            )
+        elif metadata.get("files") != records:
+            raise ValueError(f"unlisted plugin checksums are stale: {relative_plugin}")
     library = dict(catalogue["library"])
     browser_plugin = library.pop("browserPlugin", None)
     if browser_plugin:

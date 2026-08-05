@@ -315,6 +315,44 @@ class SourceBindingTests(unittest.TestCase):
             )
             self.assertEqual(status, "local files modified")
 
+    def test_update_allows_removal_of_previously_managed_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / CORE["qualified_folder"](self.plugin.qualified_id)
+            target.mkdir()
+            old_content = b"old managed file"
+            (target / "SKILL.md").write_bytes(self.content)
+            (target / "old.txt").write_bytes(old_content)
+            (target / ".skillcli.json").write_text(
+                json.dumps(
+                    {
+                        "qualifiedId": self.plugin.qualified_id,
+                        "source": {"repository": "Owner/Repo"},
+                        "files": [
+                            {
+                                "relativePath": "SKILL.md",
+                                "sha256": self.digest,
+                            },
+                            {
+                                "relativePath": "old.txt",
+                                "sha256": hashlib.sha256(old_content).hexdigest(),
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            _, status = CORE["replace_folder"](
+                root,
+                self.plugin,
+                {"SKILL.md": self.content},
+                b"{}",
+                "scout",
+                True,
+            )
+            self.assertEqual(status, "updated")
+            self.assertFalse((target / "old.txt").exists())
+
     def test_remove_refuses_namespace_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

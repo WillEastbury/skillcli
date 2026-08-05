@@ -54,7 +54,7 @@
     },
     {
       "path": "scripts/skillcli_core.py",
-      "sha256": "f87a5b4b9420305328345825a1922c0f1fbd182addf6de7a53f3947b7ace43c1",
+      "sha256": "7e231335bbba4f9f26e1ce2d756d3c20defacbcf475f59d58d132cfc2de40869",
       "target": "tool"
     },
     {

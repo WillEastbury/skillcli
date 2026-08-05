@@ -593,11 +593,13 @@ def replace_folder(
             != plugin.source.config.repository
         ):
             return str(target), "source namespace mismatch"
+        managed_paths = set()
         for record in receipt.get("files", []):
             relative = record.get("relativePath")
             digest = record.get("sha256")
             if not isinstance(relative, str) or not isinstance(digest, str):
                 return str(target), "invalid source metadata"
+            managed_paths.add(relative)
             local_file = target.joinpath(*safe_path(relative).parts)
             if (
                 not local_file.is_file()
@@ -610,7 +612,10 @@ def replace_folder(
             if path.is_file()
         }
         unexpected = sorted(
-            existing_files - set(content) - {"catalogue.json", ".skillcli.json"}
+            existing_files
+            - set(content)
+            - managed_paths
+            - {"catalogue.json", ".skillcli.json"}
         )
         if unexpected:
             return str(target), "local files present"
