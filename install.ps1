@@ -23,7 +23,11 @@ $ToolDirectory = if ($env:SKILLCLI_TOOL_DIRECTORY) {
 }
 
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
-    throw 'Python 3 is required.'
+    throw 'Python 3.10 or newer is required.'
+}
+$pythonVersion = & python -c "import sys; print('.'.join(map(str, sys.version_info[:3])))"
+if ($LASTEXITCODE -ne 0 -or [version]$pythonVersion -lt [version]'3.10') {
+    throw "Python 3.10 or newer is required. Found: $pythonVersion"
 }
 if ($SourcesRepository -notmatch '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$') {
     throw 'SKILLCLI_SOURCES_REPOSITORY must use OWNER/REPO format.'
@@ -56,6 +60,7 @@ function Get-RepositoryFile(
         return ($content -join "`n") + "`n"
     }
     return (Invoke-WebRequest `
+        -UseBasicParsing `
         -Uri "https://raw.githubusercontent.com/$Repository/$Commit/$Path" `
         -Headers @{ 'User-Agent' = 'skillcli-installer' }).Content
 }
@@ -108,9 +113,13 @@ foreach ($record in $toolFiles) {
         $false
     $normalized = ([string]$content).Replace("`r`n", "`n").Replace("`r", "`n")
     $bytes = [Text.UTF8Encoding]::new($false).GetBytes($normalized)
-    $actual = [Convert]::ToHexString(
-        [Security.Cryptography.SHA256]::HashData($bytes)
-    ).ToLowerInvariant()
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    try {
+        $hash = $sha256.ComputeHash($bytes)
+    } finally {
+        $sha256.Dispose()
+    }
+    $actual = -join ($hash | ForEach-Object { $_.ToString('x2') })
     if ($actual -ne $record.sha256) {
         throw "Checksum mismatch for $($record.path)."
     }

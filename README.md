@@ -2,6 +2,19 @@
 
 ## Install
 
+### Requirements
+
+| Scenario | Requirements |
+| --- | --- |
+| Native GitHub Copilot CLI marketplace | GitHub Copilot CLI signed in to GitHub |
+| Public `skillcli` catalogue | Python 3.10+; no GitHub CLI or token required |
+| Private `skillcli` catalogue | Python 3.10+ plus authenticated GitHub CLI (`gh`) with access to the private repository |
+| Windows installer | Windows PowerShell 5.1+ or PowerShell 7 |
+| macOS/Linux installer | Bash, Python 3.10+, and `curl` |
+
+`gh` is only required when a configured catalogue is private. Public marketplaces and
+plugins are downloaded anonymously over HTTPS.
+
 ### GitHub Copilot CLI — native marketplace
 
 ```text
@@ -16,7 +29,7 @@ Marketplace: [github.com/WillEastbury/skillcli](https://github.com/WillEastbury/
 Windows:
 
 ```powershell
-$p=Join-Path $env:TEMP 'skillcli-install.ps1'; iwr -Headers @{Accept='application/vnd.github.raw+json';'User-Agent'='skillcli'} 'https://api.github.com/repos/WillEastbury/skillcli/contents/install.ps1?ref=main' -OutFile $p; Unblock-File $p; & $p; Remove-Item $p
+$p=Join-Path $env:TEMP 'skillcli-install.ps1'; iwr -UseBasicParsing -Headers @{Accept='application/vnd.github.raw+json';'User-Agent'='skillcli'} 'https://api.github.com/repos/WillEastbury/skillcli/contents/install.ps1?ref=main' -OutFile $p; Unblock-File $p; & $p; Remove-Item $p
 ```
 
 macOS or Linux:
@@ -43,7 +56,7 @@ skillcli update --all
 Layer a private catalogue over the public source:
 
 ```powershell
-$env:SKILLCLI_SOURCES_REPOSITORY='your-org/private-skills'; $p=Join-Path $env:TEMP 'skillcli-install.ps1'; iwr -Headers @{Accept='application/vnd.github.raw+json';'User-Agent'='skillcli'} 'https://api.github.com/repos/WillEastbury/skillcli/contents/install.ps1?ref=main' -OutFile $p; Unblock-File $p; & $p; Remove-Item $p
+$env:SKILLCLI_SOURCES_REPOSITORY='your-org/private-skills'; $p=Join-Path $env:TEMP 'skillcli-install.ps1'; iwr -UseBasicParsing -Headers @{Accept='application/vnd.github.raw+json';'User-Agent'='skillcli'} 'https://api.github.com/repos/WillEastbury/skillcli/contents/install.ps1?ref=main' -OutFile $p; Unblock-File $p; & $p; Remove-Item $p
 ```
 
 The installer downloads `skillcli`, adds it to the user PATH, and installs Skill Zero
