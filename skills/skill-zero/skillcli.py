@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import argparse
-import base64
+import hashlib
 import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -19,15 +20,26 @@ from typing import Any
 from urllib.parse import quote
 
 
-ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+QUALIFIED_ID_PATTERN = re.compile(
+    r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/[a-z0-9]+(?:-[a-z0-9]+)*$"
+)
+SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
+WINDOWS_INVALID = set('<>:"|?*')
+WINDOWS_RESERVED = {
+    "con",
+    "prn",
+    "aux",
+    "nul",
+    *(f"com{index}" for index in range(1, 10)),
+    *(f"lpt{index}" for index in range(1, 10)),
+}
+WINDOWS_SHORT_NAME = re.compile(r"^[^.]{1,6}~[0-9]+(?:\.[^.]{0,3})?$", re.IGNORECASE)
 DEFAULT_CONFIG = {
-    "duplicatePolicy": "highest-priority",
     "sources": [
         {
             "id": "public",
             "repository": "WillEastbury/skillcli",
             "ref": "main",
-            "priority": 10,
             "private": False,
         }
     ],
@@ -45,6 +57,30 @@ def safe_path(value: str) -> PurePosixPath:
     ):
         raise ValueError(f"unsafe catalogue path: {value!r}")
     return path
+
+
+def windows_key(value: str) -> str:
+    path = safe_path(value)
+    keys = []
+    for part in path.parts:
+        if part.endswith((" ", ".")):
+            raise ValueError(f"Windows path component has a trailing dot/space: {value}")
+        if any(ord(character) < 32 or character in WINDOWS_INVALID for character in part):
+            raise ValueError(f"Windows path component has invalid characters: {value}")
+        if part.split(".", 1)[0].casefold() in WINDOWS_RESERVED:
+            raise ValueError(f"Windows reserved path component: {value}")
+        if WINDOWS_SHORT_NAME.fullmatch(part):
+            raise ValueError(f"Windows 8.3-style path component: {value}")
+        keys.append(part.casefold())
+    return "/".join(keys)
+
+
+def is_reparse_point(path: Path) -> bool:
+    try:
+        attributes = getattr(os.lstat(path), "st_file_attributes", 0)
+    except OSError:
+        return False
+    return bool(attributes & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0))
 
 
 def gh(arguments: list[str]) -> bytes:
@@ -116,7 +152,6 @@ class SourceConfig:
     id: str
     repository: str
     ref: str
-    priority: int
     private: bool
 
 
@@ -124,10 +159,8 @@ class Source:
     def __init__(self, config: SourceConfig) -> None:
         self.config = config
         self.commit: str | None = None
-        self.tree_sha: str | None = None
         self._manifest_bytes: bytes | None = None
         self._manifest: dict[str, Any] | None = None
-        self._tree: list[dict[str, Any]] | None = None
 
     def api_json(self, endpoint: str) -> dict[str, Any]:
         if self.config.private:
@@ -144,7 +177,6 @@ class Source:
             f"repos/{self.config.repository}/commits/{quote(self.config.ref, safe='')}"
         )
         self.commit = response["sha"]
-        self.tree_sha = response["commit"]["tree"]["sha"]
         return self.commit
 
     def read(self, path: str) -> bytes:
@@ -183,40 +215,6 @@ class Source:
             self._manifest = value
         return self._manifest
 
-    def tree(self) -> list[dict[str, Any]]:
-        if self._tree is not None:
-            return self._tree
-        self.resolve()
-        assert self.tree_sha
-        response = self.api_json(
-            f"repos/{self.config.repository}/git/trees/{self.tree_sha}?recursive=1"
-        )
-        if response.get("truncated"):
-            raise RuntimeError(f"{self.config.id} returned a truncated repository tree")
-        tree = response.get("tree")
-        if not isinstance(tree, list):
-            raise RuntimeError(f"{self.config.id} did not return a repository tree")
-        self._tree = tree
-        return tree
-
-    def files(self, skill: dict[str, Any]) -> list[str]:
-        prefix = safe_path(skill["path"]).as_posix() + "/"
-        files = []
-        for entry in self.tree():
-            path = entry.get("path")
-            if not isinstance(path, str) or not path.startswith(prefix):
-                continue
-            if entry.get("type") == "blob" and entry.get("mode") != "120000":
-                files.append(path)
-            elif entry.get("type") != "tree":
-                raise ValueError(
-                    f"unsupported Git object in {self.config.id} skill folder: {path}"
-                )
-        if prefix + skill["entrypoint"] not in files:
-            raise ValueError(f"skill entrypoint is missing: {skill['id']}")
-        return sorted(files)
-
-
 @dataclass(frozen=True)
 class Skill:
     source: Source
@@ -226,8 +224,6 @@ class Skill:
 class Catalogues:
     def __init__(self) -> None:
         config = load_config()
-        if config.get("duplicatePolicy") != "highest-priority":
-            raise ValueError("duplicatePolicy must be highest-priority")
         source_values = config.get("sources")
         if not isinstance(source_values, list) or not source_values:
             raise ValueError("source configuration must contain sources")
@@ -237,7 +233,6 @@ class Catalogues:
                     id=value["id"],
                     repository=value["repository"],
                     ref=value.get("ref", "main"),
-                    priority=int(value.get("priority", 0)),
                     private=bool(value.get("private", False)),
                 )
             )
@@ -249,34 +244,36 @@ class Catalogues:
 
     def _load(self) -> None:
         available = 0
-        for source in sorted(
-            self.sources,
-            key=lambda item: item.config.priority,
-        ):
+        for source in self.sources:
             try:
                 manifest = source.manifest()
             except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
                 self.warnings.append(f"{source.config.id}: {exc}")
                 continue
             available += 1
+            namespace = manifest.get("library", {}).get("namespace")
+            if namespace != source.config.repository:
+                self.warnings.append(
+                    f"{source.config.id}: namespace {namespace!r} does not match "
+                    f"repository {source.config.repository!r}"
+                )
+                continue
             for metadata in manifest["skills"]:
                 skill_id = metadata.get("id")
                 if not isinstance(skill_id, str):
                     continue
-                current = self.skills.get(skill_id)
-                if (
-                    current is None
-                    or source.config.priority >= current.source.config.priority
-                ):
-                    self.skills[skill_id] = Skill(source, metadata)
+                qualified_id = f"{namespace}/{skill_id}"
+                if qualified_id in self.skills:
+                    raise ValueError(f"duplicate qualified skill ID: {qualified_id}")
+                self.skills[qualified_id] = Skill(source, metadata)
         if not available:
             raise RuntimeError("no configured skill catalogue could be loaded")
 
-    def skill(self, skill_id: str) -> Skill:
+    def skill(self, qualified_id: str) -> Skill:
         try:
-            return self.skills[skill_id]
+            return self.skills[qualified_id]
         except KeyError as exc:
-            raise ValueError(f"unknown skill: {skill_id}") from exc
+            raise ValueError(f"unknown skill: {qualified_id}") from exc
 
     def snapshot(self) -> bytes:
         value = {
@@ -285,16 +282,16 @@ class Catalogues:
                     "id": source.config.id,
                     "repository": source.config.repository,
                     "ref": source.config.ref,
-                    "priority": source.config.priority,
                 }
                 for source in self.sources
             ],
             "skills": [
                 {
                     **skill.metadata,
+                    "qualifiedId": qualified_id,
                     "catalogueSource": skill.source.config.id,
                 }
-                for skill in sorted(self.skills.values(), key=lambda item: item.metadata["id"])
+                for qualified_id, skill in sorted(self.skills.items())
             ],
         }
         return (json.dumps(value, indent=2) + "\n").encode("utf-8")
@@ -386,7 +383,7 @@ def show_warnings(catalogues: Catalogues) -> None:
 def search(catalogues: Catalogues, role: str, query: str) -> None:
     query_terms = terms(query)
     matches = []
-    for skill in catalogues.skills.values():
+    for qualified_id, skill in catalogues.skills.items():
         metadata = skill.metadata
         if metadata["status"] != "approved" or metadata["review"]["state"] != "approved":
             continue
@@ -406,19 +403,19 @@ def search(catalogues: Catalogues, role: str, query: str) -> None:
             continue
         score = len(matched) * 4 + (3 if role in metadata["roles"] else 0)
         reason = ", ".join(sorted(matched)) or "role match"
-        matches.append((score, skill, reason))
-    matches.sort(key=lambda item: (-item[0], item[1].metadata["id"]))
+        matches.append((score, qualified_id, skill, reason))
+    matches.sort(key=lambda item: (-item[0], item[1]))
     rows = [
         [
             rank,
-            skill.metadata["id"],
+            qualified_id,
             skill.metadata["name"],
             skill.metadata["version"],
             skill.source.config.id,
             reason,
             requirements(skill.metadata),
         ]
-        for rank, (_, skill, reason) in enumerate(matches[:10], start=1)
+        for rank, (_, qualified_id, skill, reason) in enumerate(matches[:10], start=1)
     ]
     print(
         table(
@@ -432,43 +429,101 @@ def search(catalogues: Catalogues, role: str, query: str) -> None:
 def reject_symlinks(path: Path) -> None:
     current = path
     while current != current.parent:
-        if current.exists() and current.is_symlink():
-            raise ValueError(f"destination contains a symbolic link: {current}")
+        if current.exists() and (current.is_symlink() or is_reparse_point(current)):
+            raise ValueError(f"destination contains a link/reparse point: {current}")
         current = current.parent
     if path.exists():
         for child in path.rglob("*"):
-            if child.is_symlink():
-                raise ValueError(f"destination contains a symbolic link: {child}")
+            if child.is_symlink() or is_reparse_point(child):
+                raise ValueError(f"destination contains a link/reparse point: {child}")
 
 
 def remote_content(skill: Skill) -> dict[str, bytes]:
     prefix = safe_path(skill.metadata["path"]).as_posix() + "/"
-    return {
-        path[len(prefix) :]: skill.source.read(path)
-        for path in skill.source.files(skill.metadata)
-    }
+    records = skill.metadata.get("files")
+    if not isinstance(records, list) or not records:
+        raise ValueError(f"skill has no declared files: {skill.metadata['id']}")
+    content: dict[str, bytes] = {}
+    keys: set[str] = set()
+    for record in records:
+        if not isinstance(record, dict):
+            raise ValueError(f"skill has an invalid file record: {skill.metadata['id']}")
+        relative = record.get("path")
+        digest = record.get("sha256")
+        if not isinstance(relative, str) or not isinstance(digest, str):
+            raise ValueError(f"skill has an invalid file record: {skill.metadata['id']}")
+        key = windows_key(relative)
+        if key in keys:
+            raise ValueError(f"skill has a Windows path collision: {relative}")
+        keys.add(key)
+        if not SHA256_PATTERN.fullmatch(digest):
+            raise ValueError(f"skill has an invalid checksum: {relative}")
+        value = skill.source.read(prefix + safe_path(relative).as_posix())
+        actual = hashlib.sha256(value).hexdigest()
+        if actual != digest:
+            raise ValueError(
+                f"checksum mismatch for {skill.source.config.repository}/{relative}"
+            )
+        content[relative] = value
+    if skill.metadata["entrypoint"] not in content:
+        raise ValueError(f"skill entrypoint is not declared: {skill.metadata['id']}")
+    return content
+
+
+def qualified_folder(qualified_id: str) -> str:
+    if not QUALIFIED_ID_PATTERN.fullmatch(qualified_id):
+        raise ValueError("skill ID must use OWNER/REPO/skill-id")
+    return qualified_id.replace("/", "!")
 
 
 def replace_folder(
     root: Path,
+    qualified_id: str,
     skill: Skill,
     content: dict[str, bytes],
     snapshot: bytes,
     host: str,
     allow_existing: bool,
 ) -> tuple[str, str]:
-    target = root / skill.metadata["id"]
+    target = root / qualified_folder(qualified_id)
     reject_symlinks(target)
     existed = target.exists()
     if existed and not allow_existing:
         return str(target), "already installed"
     if existed:
+        receipt_path = target / ".skillcli.json"
+        if receipt_path.is_file():
+            try:
+                receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                return str(target), "invalid source metadata"
+            if (
+                receipt.get("qualifiedId") != qualified_id
+                or receipt.get("source", {}).get("repository")
+                != skill.source.config.repository
+            ):
+                return str(target), "source namespace mismatch"
+            for record in receipt.get("files", []):
+                relative = record.get("path")
+                digest = record.get("sha256")
+                if not isinstance(relative, str) or not isinstance(digest, str):
+                    return str(target), "invalid source metadata"
+                local_file = target.joinpath(*safe_path(relative).parts)
+                if (
+                    not local_file.is_file()
+                    or hashlib.sha256(local_file.read_bytes()).hexdigest() != digest
+                ):
+                    return str(target), "local files modified"
+        else:
+            return str(target), "missing source metadata"
         existing = {
             path.relative_to(target).as_posix()
             for path in target.rglob("*")
             if path.is_file()
         }
-        unexpected = sorted(existing - set(content) - {"catalogue.json"})
+        unexpected = sorted(
+            existing - set(content) - {"catalogue.json", ".skillcli.json"}
+        )
         if unexpected:
             return str(target), "local files present"
     root.mkdir(parents=True, exist_ok=True)
@@ -479,9 +534,44 @@ def replace_folder(
     backup = transaction / "backup"
     try:
         for relative, value in content.items():
+            windows_key(relative)
             destination = staged.joinpath(*safe_path(relative).parts)
             destination.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                destination.resolve().relative_to(staged.resolve())
+            except ValueError as exc:
+                raise ValueError(f"destination escapes staging: {relative}") from exc
             destination.write_bytes(value)
+        identities: dict[tuple[int, int], str] = {}
+        expected_digests = {
+            record["path"]: record["sha256"] for record in skill.metadata["files"]
+        }
+        for relative, expected_digest in expected_digests.items():
+            staged_file = staged.joinpath(*safe_path(relative).parts)
+            actual_digest = hashlib.sha256(staged_file.read_bytes()).hexdigest()
+            if actual_digest != expected_digest:
+                raise ValueError(f"staged checksum mismatch: {relative}")
+            stat_result = staged_file.stat()
+            identity = (stat_result.st_dev, stat_result.st_ino)
+            if identity in identities:
+                raise ValueError(
+                    f"filesystem alias collision: {relative} and {identities[identity]}"
+                )
+            identities[identity] = relative
+        receipt = {
+            "qualifiedId": qualified_id,
+            "source": {
+                "id": skill.source.config.id,
+                "repository": skill.source.config.repository,
+                "commit": skill.source.resolve(),
+            },
+            "version": skill.metadata["version"],
+            "files": skill.metadata["files"],
+        }
+        (staged / ".skillcli.json").write_text(
+            json.dumps(receipt, indent=2) + "\n",
+            encoding="utf-8",
+        )
         if host == "copilot-cowork" and skill.metadata["id"] == "skill-zero":
             (staged / "catalogue.json").write_bytes(snapshot)
         if existed:
@@ -499,19 +589,20 @@ def replace_folder(
     return str(target), "updated" if existed else "installed"
 
 
-def install_or_update(catalogues: Catalogues, skill_id: str, update: bool) -> None:
-    if not ID_PATTERN.fullmatch(skill_id):
-        raise ValueError("skill ID must be lowercase kebab-case")
-    skill = catalogues.skill(skill_id)
+def install_or_update(catalogues: Catalogues, qualified_id: str, update: bool) -> None:
+    if not QUALIFIED_ID_PATTERN.fullmatch(qualified_id):
+        raise ValueError("skill ID must use OWNER/REPO/skill-id")
+    skill = catalogues.skill(qualified_id)
     metadata = skill.metadata
     if metadata["status"] != "approved" or metadata["review"]["state"] != "approved":
-        raise ValueError(f"skill is not approved: {skill_id}")
+        raise ValueError(f"skill is not approved: {qualified_id}")
     content = remote_content(skill)
     rows = []
     snapshot = catalogues.snapshot()
     for host, root in destinations().items():
         destination, status = replace_folder(
             root,
+            qualified_id,
             skill,
             content,
             snapshot,
@@ -531,24 +622,29 @@ def install_or_update(catalogues: Catalogues, skill_id: str, update: bool) -> No
     show_warnings(catalogues)
 
 
-def remove(skill_id: str) -> None:
-    if not ID_PATTERN.fullmatch(skill_id):
-        raise ValueError("skill ID must be lowercase kebab-case")
+def remove(qualified_id: str) -> None:
+    if not QUALIFIED_ID_PATTERN.fullmatch(qualified_id):
+        raise ValueError("skill ID must use OWNER/REPO/skill-id")
     rows = []
     for host, root in destinations().items():
-        target = root / skill_id
+        target = root / qualified_folder(qualified_id)
         if not target.exists():
             rows.append([host, "not installed", str(target)])
             continue
         reject_symlinks(target)
-        metadata = frontmatter(target / "SKILL.md") if (target / "SKILL.md").is_file() else {}
-        if metadata.get("skill-id") != skill_id:
-            rows.append([host, "refused: identity mismatch", str(target)])
+        receipt_path = target / ".skillcli.json"
+        try:
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            rows.append([host, "refused: missing source metadata", str(target)])
+            continue
+        if receipt.get("qualifiedId") != qualified_id:
+            rows.append([host, "refused: namespace mismatch", str(target)])
             continue
         transaction = Path(
-            tempfile.mkdtemp(prefix=f".skillcli-remove-{skill_id}-", dir=root)
+            tempfile.mkdtemp(prefix=".skillcli-remove-", dir=root)
         )
-        target.replace(transaction / skill_id)
+        target.replace(transaction / qualified_folder(qualified_id))
         shutil.rmtree(transaction)
         rows.append([host, "removed", str(target)])
     print(table(["Host", "Status", "Destination"], rows))
@@ -560,11 +656,16 @@ def installed_ids() -> set[str]:
         if not root.exists():
             continue
         for folder in root.iterdir():
-            skill_file = folder / "SKILL.md"
-            if folder.is_dir() and skill_file.is_file():
-                skill_id = frontmatter(skill_file).get("skill-id")
-                if skill_id:
-                    values.add(skill_id)
+            receipt_path = folder / ".skillcli.json"
+            if folder.is_dir() and receipt_path.is_file():
+                try:
+                    qualified_id = json.loads(
+                        receipt_path.read_text(encoding="utf-8")
+                    ).get("qualifiedId")
+                except (OSError, json.JSONDecodeError):
+                    continue
+                if isinstance(qualified_id, str):
+                    values.add(qualified_id)
     return values
 
 

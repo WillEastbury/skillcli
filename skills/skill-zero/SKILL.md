@@ -1,7 +1,7 @@
 ---
 name: "Skill Zero: Library Browser"
 description: "Orchestrates the managed skillcli command to search, install, remove, and update approved skills across detected agent hosts."
-version: "4.0.2"
+version: "5.0.0"
 skill-id: "skill-zero"
 ---
 
@@ -34,7 +34,7 @@ Present the returned table. Do not show more results than the CLI returns.
 On an explicit user selection, run:
 
 ```text
-skillcli install --skill <skill-id>
+skillcli install --skill <owner>/<repo>/<skill-id>
 ```
 
 The CLI installs to every detected Copilot CLI, Scout managed-skills, and Co-Work
@@ -45,7 +45,7 @@ OneDrive skills location. Report its result table exactly. Do not manually copy 
 Run one of:
 
 ```text
-skillcli update --skill <skill-id>
+skillcli update --skill <owner>/<repo>/<skill-id>
 skillcli update --all
 ```
 
@@ -61,7 +61,7 @@ create a new skill until the user agrees.
 On an explicit removal request, run:
 
 ```text
-skillcli remove --skill <skill-id>
+skillcli remove --skill <owner>/<repo>/<skill-id>
 ```
 
 Report any identity mismatch or local-file refusal rather than bypassing it.

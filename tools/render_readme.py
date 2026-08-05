@@ -36,7 +36,7 @@ def requirements(skill: dict[str, Any]) -> str:
     return "; ".join(values) or "none"
 
 
-def table(skills: list[dict[str, Any]]) -> str:
+def table(skills: list[dict[str, Any]], namespace: str) -> str:
     lines = [
         "| ID | Name | Version | Status | Requirements | Description |",
         "| --- | --- | --- | --- | --- | --- |",
@@ -44,7 +44,7 @@ def table(skills: list[dict[str, Any]]) -> str:
     for skill in sorted(skills, key=lambda item: item["id"]):
         lines.append(
             "| `{id}` | {name} | {version} | {status} | {requirements} | {description} |".format(
-                id=cell(skill["id"]),
+                id=cell(f"{namespace}/{skill['id']}"),
                 name=cell(skill["name"]),
                 version=cell(skill["version"]),
                 status=cell(skill["status"]),
@@ -73,7 +73,7 @@ def full_catalogue(manifest: dict[str, Any]) -> str:
             f"**Registry version:** {manifest['manifestVersion']}",
             f"**Registered skills:** {len(manifest['skills'])}",
             "",
-            table(manifest["skills"]),
+            table(manifest["skills"], manifest["library"]["namespace"]),
             "",
         ]
     )
@@ -97,7 +97,10 @@ def main() -> int:
     current_readme = readme_path.read_text(encoding="utf-8")
     core_ids = {"skill-zero", "skill-one", "skill-two"}
     core = [skill for skill in manifest["skills"] if skill["id"] in core_ids]
-    expected_readme = replace_catalog(current_readme, table(core))
+    expected_readme = replace_catalog(
+        current_readme,
+        table(core, manifest["library"]["namespace"]),
+    )
     expected_skills = full_catalogue(manifest)
 
     if args.check:

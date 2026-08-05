@@ -118,7 +118,7 @@ if ($env:SKILLCLI_NO_PATH_UPDATE -ne '1') {
 }
 $env:Path = "$ToolDirectory;$env:Path"
 
-& $wrapperPath update --skill skill-zero
+& $wrapperPath update --skill WillEastbury/skillcli/skill-zero
 if ($LASTEXITCODE -ne 0) {
     throw 'Skill Zero installation failed.'
 }
