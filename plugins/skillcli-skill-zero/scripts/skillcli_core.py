@@ -251,7 +251,10 @@ class Catalogues:
                 SourceConfig(
                     id=value["id"],
                     repository=value["repository"],
-                    ref=value.get("ref", "main"),
+                    ref=os.environ.get(
+                        "SKILLCLI_SOURCE_REF_OVERRIDE",
+                        value.get("ref", "main"),
+                    ),
                     private=bool(value.get("private", False)),
                 )
             )
@@ -365,6 +368,8 @@ def native_copilot_available() -> bool:
 
 
 def filesystem_destinations() -> dict[str, Path]:
+    if os.environ.get("SKILLCLI_DISABLE_FILESYSTEM") == "1":
+        return {}
     override = os.environ.get("SKILLCLI_DESTINATIONS")
     if override:
         value = json.loads(override)
@@ -419,12 +424,15 @@ def ensure_native_marketplace(plugin: Plugin) -> None:
             errors="replace",
         ).casefold()
     if not found:
+        specification = plugin.source.config.repository
+        if plugin.source.config.ref != "main":
+            specification += f"#{plugin.source.config.ref}"
         run_copilot(
             [
                 "plugin",
                 "marketplace",
                 "add",
-                plugin.source.config.repository,
+                specification,
             ]
         )
 

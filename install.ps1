@@ -1,7 +1,11 @@
 $ErrorActionPreference = 'Stop'
 
 $PublicRepository = 'WillEastbury/skillcli'
-$PublicRef = 'main'
+$PublicRef = if ($env:SKILLCLI_PUBLIC_REF) {
+    $env:SKILLCLI_PUBLIC_REF
+} else {
+    'main'
+}
 $SourcesRepository = if ($env:SKILLCLI_SOURCES_REPOSITORY) {
     $env:SKILLCLI_SOURCES_REPOSITORY
 } else {
