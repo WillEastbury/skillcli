@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import os
@@ -252,7 +253,14 @@ def build(root: Path, update: bool) -> dict[str, Any]:
 
 
 def main() -> int:
-    root = Path(__file__).resolve().parents[1]
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--root",
+        type=Path,
+        default=Path(__file__).resolve().parents[1],
+    )
+    args = parser.parse_args()
+    root = args.root.resolve()
     build(root, update=True)
     print("Updated plugin checksums and generated skills.json")
     return 0

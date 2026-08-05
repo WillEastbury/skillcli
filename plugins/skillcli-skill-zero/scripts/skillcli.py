@@ -12,7 +12,9 @@ from skillcli_core import (
     install_or_update,
     installed_qualified_ids,
     remove_plugin,
+    register_source,
     search_plugins,
+    self_update,
 )
 
 
@@ -52,12 +54,56 @@ def parser() -> argparse.ArgumentParser:
     selection = update.add_mutually_exclusive_group(required=True)
     selection.add_argument("--skill")
     selection.add_argument("--all", action="store_true")
+    register = commands.add_parser("register")
+    register.add_argument("repository")
+    register.add_argument("--ref", default="main")
+    commands.add_parser("self-update")
     return result
 
 
 def main() -> int:
     args = parser().parse_args()
     try:
+        if args.command == "register":
+            result = register_source(args.repository, args.ref)
+            print(
+                table(
+                    ["Repository", "Marketplace", "Visibility", "Status", "Native Copilot"],
+                    [
+                        [
+                            result["repository"],
+                            result["marketplace"],
+                            result["visibility"],
+                            result["status"],
+                            result["nativeCopilot"],
+                        ]
+                    ],
+                )
+            )
+            return 0
+        if args.command == "self-update":
+            result = self_update(Catalogues())
+            print(
+                f"skillcli updated to {result['version']} "
+                f"from commit {result['commit']}"
+            )
+            print(f"Tool directory: {result['toolDirectory']}")
+            print(
+                table(
+                    ["Host", "Status", "Version", "Source", "Destination"],
+                    [
+                        [
+                            row["host"],
+                            row["status"],
+                            row["version"],
+                            row["source"],
+                            row["destination"],
+                        ]
+                        for row in result["hosts"]
+                    ],
+                )
+            )
+            return 0
         catalogues = Catalogues()
         if args.command == "search":
             results = search_plugins(catalogues, args.role, args.query)

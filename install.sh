@@ -3,8 +3,6 @@ set -euo pipefail
 
 PUBLIC_REPOSITORY="WillEastbury/skillcli"
 PUBLIC_REF="${SKILLCLI_PUBLIC_REF:-main}"
-SOURCES_REPOSITORY="${SKILLCLI_SOURCES_REPOSITORY:-$PUBLIC_REPOSITORY}"
-SOURCES_REF="${SKILLCLI_SOURCES_REF:-main}"
 TOOL_DIRECTORY="${SKILLCLI_TOOL_DIRECTORY:-$HOME/.local/share/skillcli}"
 BIN_DIRECTORY="${SKILLCLI_BIN_DIRECTORY:-$HOME/.local/bin}"
 
@@ -28,25 +26,6 @@ public_commit="$(
     python3 -c 'import json,sys; print(json.load(sys.stdin)["sha"])'
 )"
 
-source_is_private=0
-if [[ "$SOURCES_REPOSITORY" != "$PUBLIC_REPOSITORY" ]]; then
-  source_is_private=1
-  command -v gh >/dev/null 2>&1 || {
-    echo "GitHub CLI is required for private catalogue $SOURCES_REPOSITORY." >&2
-    exit 1
-  }
-  sources_commit="$(
-    gh api "repos/$SOURCES_REPOSITORY/commits/$SOURCES_REF" --jq '.sha'
-  )"
-else
-  sources_commit="$(
-    curl -fsSL \
-      -H "User-Agent: skillcli-installer" \
-      "https://api.github.com/repos/$SOURCES_REPOSITORY/commits/$SOURCES_REF" |
-      python3 -c 'import json,sys; print(json.load(sys.stdin)["sha"])'
-  )"
-fi
-
 temporary="$(mktemp -d)"
 trap 'rm -rf "$temporary"' EXIT
 
@@ -55,16 +34,9 @@ curl -fsSL \
   "https://raw.githubusercontent.com/$PUBLIC_REPOSITORY/$public_commit/$plugin_path/skillcli.json" \
   -o "$temporary/skillcli.json"
 
-if [[ "$source_is_private" == "1" ]]; then
-  gh api \
-    -H "Accept: application/vnd.github.raw+json" \
-    "repos/$SOURCES_REPOSITORY/contents/skill-sources.json?ref=$sources_commit" \
-    >"$temporary/sources.json"
-else
-  curl -fsSL \
-    "https://raw.githubusercontent.com/$SOURCES_REPOSITORY/$sources_commit/skill-sources.json" \
-    -o "$temporary/sources.json"
-fi
+curl -fsSL \
+  "https://raw.githubusercontent.com/$PUBLIC_REPOSITORY/$public_commit/skill-sources.json" \
+  -o "$temporary/sources.json"
 
 mkdir -p "$TOOL_DIRECTORY" "$BIN_DIRECTORY"
 
@@ -125,7 +97,7 @@ chmod 755 "$BIN_DIRECTORY/skillcli"
 echo
 echo "Installed: skillcli and Skill Zero"
 echo "CLI commit: $public_commit"
-echo "Catalogue configuration: $SOURCES_REPOSITORY@$sources_commit"
+echo "Catalogue configuration: $PUBLIC_REPOSITORY@$public_commit"
 if [[ ":$PATH:" != *":$BIN_DIRECTORY:"* ]]; then
   echo "Add this directory to PATH: $BIN_DIRECTORY"
 fi

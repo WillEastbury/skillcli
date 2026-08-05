@@ -17,13 +17,13 @@
     {
       "name": "skillcli-skill-one",
       "description": "Submit proposed skills through a governed GitHub intake workflow.",
-      "version": "4.0.0",
+      "version": "4.1.0",
       "source": "plugins/skillcli-skill-one"
     },
     {
       "name": "skillcli-skill-two",
       "description": "Build a reusable skill when no approved catalogue skill matches.",
-      "version": "2.0.1",
+      "version": "2.1.0",
       "source": "plugins/skillcli-skill-two"
     },
     {

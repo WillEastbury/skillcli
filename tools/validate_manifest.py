@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 import sys
@@ -44,12 +45,25 @@ def validate_sources(root: Path) -> list[str]:
             errors.append(f"{label}.ref is invalid")
         if not isinstance(source.get("private"), bool):
             errors.append(f"{label}.private must be boolean")
+        gh_user = source.get("ghUser")
+        if gh_user is not None and (
+            not isinstance(gh_user, str) or not gh_user.strip()
+        ):
+            errors.append(f"{label}.ghUser must be a non-empty string")
     return errors
 
 
 def main() -> int:
-    root = Path(__file__).resolve().parents[1]
-    errors = validate_sources(root)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--root",
+        type=Path,
+        default=Path(__file__).resolve().parents[1],
+    )
+    parser.add_argument("--skip-sources", action="store_true")
+    args = parser.parse_args()
+    root = args.root.resolve()
+    errors = [] if args.skip_sources else validate_sources(root)
     try:
         expected = build(root, update=False)
         actual = json.loads((root / "skills.json").read_text(encoding="utf-8"))

@@ -35,6 +35,10 @@
           },
           "private": {
             "type": "boolean"
+          },
+          "ghUser": {
+            "type": "string",
+            "minLength": 1
           }
         }
       }

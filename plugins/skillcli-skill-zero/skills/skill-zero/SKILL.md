@@ -28,6 +28,17 @@ skillcli search --role <role-id> --query "<user need>"
 
 Present the returned table. Do not show more results than the CLI returns.
 
+## Register a marketplace
+
+When the user asks to add another public or private marketplace, run:
+
+```text
+skillcli register <owner>/<repo>
+```
+
+Report whether it was public or private and whether native Copilot CLI registration also
+succeeded.
+
 If `skillcli` is unavailable but this skill is running as a Copilot CLI plugin, browse
 the registered marketplaces natively:
 
@@ -93,3 +104,14 @@ Native Copilot CLI equivalent:
 ```text
 copilot plugin uninstall <plugin-name>
 ```
+
+## Update skillcli itself
+
+On an explicit user request, run:
+
+```text
+skillcli self-update
+```
+
+This checksum-verifies and atomically replaces the standalone CLI scripts, then updates
+the Skill Zero plugin or skill folders across detected hosts.

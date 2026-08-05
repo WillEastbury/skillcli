@@ -43,6 +43,7 @@ DEFAULT_CONFIG = {
         }
     ]
 }
+REPOSITORY_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 
 def safe_path(value: str) -> PurePosixPath:
@@ -94,18 +95,42 @@ def reject_links(path: Path) -> None:
                 raise ValueError(f"destination contains a link/reparse point: {child}")
 
 
-def run(arguments: list[str], timeout: int = 60) -> subprocess.CompletedProcess[bytes]:
+def run(
+    arguments: list[str],
+    timeout: int = 60,
+    environment: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[bytes]:
     return subprocess.run(
         arguments,
         check=False,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         timeout=timeout,
+        env=environment,
     )
 
 
-def gh(arguments: list[str]) -> bytes:
-    result = run(["gh", *arguments])
+def gh(arguments: list[str], user: str | None = None) -> bytes:
+    environment = os.environ.copy()
+    if user and not environment.get("GH_TOKEN"):
+        token_result = run(
+            [
+                "gh",
+                "auth",
+                "token",
+                "--hostname",
+                "github.com",
+                "--user",
+                user,
+            ]
+        )
+        if token_result.returncode:
+            raise RuntimeError(
+                token_result.stderr.decode("utf-8", errors="replace").strip()
+                or f"cannot obtain token for GitHub account {user}"
+            )
+        environment["GH_TOKEN"] = token_result.stdout.decode("utf-8").strip()
+    result = run(["gh", *arguments], environment=environment)
     if result.returncode:
         message = result.stderr.decode("utf-8", errors="replace").strip()
         raise RuntimeError(message or f"gh exited with code {result.returncode}")
@@ -143,7 +168,7 @@ def public_bytes(url: str) -> bytes:
         raise RuntimeError(f"GitHub HTTP {exc.code} for {url}") from exc
 
 
-def load_config() -> dict[str, Any]:
+def config_candidates() -> list[Path]:
     candidates = []
     configured = os.environ.get("SKILLCLI_CONFIG")
     if configured:
@@ -155,6 +180,11 @@ def load_config() -> dict[str, Any]:
         candidates.append(
             Path(local_app_data) / "DigitalNativeSkillsLibrary" / "sources.json"
         )
+    return candidates
+
+
+def load_config() -> dict[str, Any]:
+    candidates = config_candidates()
     for path in candidates:
         if path.is_file():
             value = json.loads(path.read_text(encoding="utf-8"))
@@ -164,12 +194,36 @@ def load_config() -> dict[str, Any]:
     return DEFAULT_CONFIG
 
 
+def writable_config_path() -> Path:
+    candidates = config_candidates()
+    for path in candidates:
+        if path.is_file():
+            return path
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        return Path(local_app_data) / "skillcli" / "sources.json"
+    return Path.home() / ".local" / "share" / "skillcli" / "sources.json"
+
+
+def write_config(config: dict[str, Any]) -> Path:
+    path = writable_config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(
+        json.dumps(config, indent=2, ensure_ascii=True) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(path)
+    return path
+
+
 @dataclass(frozen=True)
 class SourceConfig:
     id: str
     repository: str
     ref: str
     private: bool
+    gh_user: str | None = None
 
 
 class Source:
@@ -180,7 +234,9 @@ class Source:
 
     def api_json(self, endpoint: str) -> dict[str, Any]:
         if self.config.private:
-            value = json.loads(gh(["api", endpoint]).decode("utf-8"))
+            value = json.loads(
+                gh(["api", endpoint], self.config.gh_user).decode("utf-8")
+            )
             if not isinstance(value, dict):
                 raise RuntimeError(f"GitHub returned invalid JSON for {endpoint}")
             return value
@@ -211,7 +267,8 @@ class Source:
                     "-H",
                     "Accept: application/vnd.github.raw+json",
                     endpoint,
-                ]
+                ],
+                self.config.gh_user,
             )
         else:
             value = public_bytes(
@@ -257,6 +314,7 @@ class Catalogues:
                         value.get("ref", "main"),
                     ),
                     private=bool(value.get("private", False)),
+                    gh_user=value.get("ghUser"),
                 )
             )
             for value in values
@@ -334,6 +392,11 @@ class Catalogues:
                     "id": source.config.id,
                     "repository": source.config.repository,
                     "ref": source.config.ref,
+                    **(
+                        {"ghUser": source.config.gh_user}
+                        if source.config.gh_user
+                        else {}
+                    ),
                 }
                 for source in self.sources
             ],
@@ -350,6 +413,106 @@ class Catalogues:
             ],
         }
         return (json.dumps(value, indent=2) + "\n").encode("utf-8")
+
+
+def probe_source(repository: str, ref: str = "main") -> tuple[Source, str]:
+    parts = repository.split("/")
+    if (
+        not REPOSITORY_PATTERN.fullmatch(repository)
+        or len(parts) != 2
+        or any(part in {".", ".."} for part in parts)
+    ):
+        raise ValueError("repository must use OWNER/REPO")
+    failures = []
+    for private in (False, True):
+        source = Source(
+            SourceConfig(
+                id="pending",
+                repository=repository,
+                ref=ref,
+                private=private,
+                gh_user=(
+                    os.environ.get("SKILLCLI_GH_USER")
+                    if private
+                    else None
+                ),
+            )
+        )
+        try:
+            catalogue = source.read_json("catalogue.json")
+            marketplace = source.read_json(".github/plugin/marketplace.json")
+        except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
+            failures.append(str(exc))
+            continue
+        if catalogue.get("library", {}).get("namespace") != repository:
+            raise ValueError("catalogue namespace does not match repository")
+        marketplace_name = marketplace.get("name")
+        plugins = marketplace.get("plugins")
+        if not isinstance(marketplace_name, str) or not isinstance(plugins, list):
+            raise ValueError("repository has an invalid plugin marketplace")
+        return source, marketplace_name
+    raise RuntimeError(
+        f"cannot access a valid marketplace at {repository}: " + "; ".join(failures)
+    )
+
+
+def register_source(repository: str, ref: str = "main") -> dict[str, str]:
+    source, marketplace_name = probe_source(repository, ref)
+    config = load_config()
+    sources = config.get("sources")
+    if not isinstance(sources, list):
+        raise ValueError("source configuration is invalid")
+    source_id = marketplace_name
+    existing = next(
+        (
+            item
+            for item in sources
+            if isinstance(item, dict) and item.get("repository") == repository
+        ),
+        None,
+    )
+    record = {
+        "id": source_id,
+        "repository": repository,
+        "ref": ref,
+        "private": source.config.private,
+    }
+    gh_user = getattr(source.config, "gh_user", None)
+    if source.config.private and gh_user:
+        record["ghUser"] = gh_user
+    if existing is None:
+        used_ids = {
+            item.get("id")
+            for item in sources
+            if isinstance(item, dict) and isinstance(item.get("id"), str)
+        }
+        if source_id in used_ids:
+            source_id = repository.replace("/", "-").casefold()
+            record["id"] = source_id
+        sources.append(record)
+        status = "registered"
+    else:
+        existing.update(record)
+        status = "already registered"
+    path = write_config(config)
+    native_status = "not available"
+    if native_copilot_available():
+        result = run(["copilot", "plugin", "marketplace", "list"], timeout=120)
+        listed = result.stdout.decode("utf-8", errors="replace").casefold()
+        if marketplace_name.casefold() in listed:
+            native_status = "already registered"
+        else:
+            specification = repository if ref == "main" else f"{repository}#{ref}"
+            run_copilot(["plugin", "marketplace", "add", specification])
+            native_status = "registered"
+    return {
+        "repository": repository,
+        "marketplace": marketplace_name,
+        "visibility": "private" if source.config.private else "public",
+        "status": status,
+        "nativeCopilot": native_status,
+        "config": str(path),
+    }
 
 
 def one_drive_root() -> Path | None:
@@ -571,6 +734,85 @@ def plugin_skill_content(plugin: Plugin) -> dict[str, bytes]:
     if "SKILL.md" not in content:
         raise ValueError(f"plugin does not declare SKILL.md: {plugin.qualified_id}")
     return content
+
+
+def plugin_tool_content(plugin: Plugin) -> dict[str, bytes]:
+    content: dict[str, bytes] = {}
+    keys: set[str] = set()
+    for record in plugin.metadata["files"]:
+        if record.get("target") != "tool":
+            continue
+        path = record.get("path")
+        digest = record.get("sha256")
+        if not isinstance(path, str) or not isinstance(digest, str):
+            raise ValueError(f"invalid tool file record in {plugin.qualified_id}")
+        filename = PurePosixPath(path).name
+        if filename not in {"skillcli.py", "skillcli_core.py"}:
+            raise ValueError(f"unexpected CLI tool file: {path}")
+        key = windows_key(filename)
+        if key in keys:
+            raise ValueError(f"Windows tool path collision: {filename}")
+        keys.add(key)
+        value = plugin.source.read(f"{plugin.path}/{safe_path(path).as_posix()}")
+        if hashlib.sha256(value).hexdigest() != digest:
+            raise ValueError(f"checksum mismatch: {plugin.qualified_id}/{path}")
+        content[filename] = value
+    if set(content) != {"skillcli.py", "skillcli_core.py"}:
+        raise ValueError("Skill Zero plugin does not declare both CLI tool files")
+    return content
+
+
+def self_update(catalogues: Catalogues) -> dict[str, Any]:
+    qualified_id = "WillEastbury/skillcli/skillcli-skill-zero"
+    plugin = catalogues.plugin(qualified_id)
+    content = plugin_tool_content(plugin)
+    configured = os.environ.get("SKILLCLI_TOOL_DIRECTORY")
+    tool_root = (
+        Path(configured).expanduser().resolve()
+        if configured
+        else Path(__file__).resolve().parent
+    )
+    reject_links(tool_root)
+    tool_root.mkdir(parents=True, exist_ok=True)
+    transaction = Path(tempfile.mkdtemp(prefix=".skillcli-self-update-", dir=tool_root))
+    staged = transaction / "staged"
+    backup = transaction / "backup"
+    staged.mkdir()
+    backup.mkdir()
+    replaced: list[str] = []
+    try:
+        for filename, value in content.items():
+            path = staged / filename
+            path.write_bytes(value)
+            expected = hashlib.sha256(value).hexdigest()
+            if hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+                raise ValueError(f"staged CLI checksum mismatch: {filename}")
+        for filename in sorted(content):
+            current = tool_root / filename
+            if current.exists():
+                current.replace(backup / filename)
+            (staged / filename).replace(current)
+            replaced.append(filename)
+        shutil.rmtree(transaction)
+    except (OSError, ValueError):
+        for filename in reversed(replaced):
+            current = tool_root / filename
+            if current.exists():
+                current.unlink()
+            old = backup / filename
+            if old.exists():
+                old.replace(current)
+        if transaction.exists():
+            shutil.rmtree(transaction)
+        raise
+    host_results = install_or_update(catalogues, qualified_id, True)
+    return {
+        "version": plugin.manifest["version"],
+        "commit": plugin.source.resolve(),
+        "toolDirectory": str(tool_root),
+        "files": sorted(content),
+        "hosts": host_results,
+    }
 
 
 def qualified_folder(qualified_id: str) -> str:
