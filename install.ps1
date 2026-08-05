@@ -56,6 +56,7 @@ function Get-RepositoryFile(
         return ($content -join "`n") + "`n"
     }
     return (Invoke-WebRequest `
+        -UseBasicParsing `
         -Uri "https://raw.githubusercontent.com/$Repository/$Commit/$Path" `
         -Headers @{ 'User-Agent' = 'skillcli-installer' }).Content
 }
