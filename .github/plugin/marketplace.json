@@ -1,0 +1,36 @@
+{
+  "name": "skillcli",
+  "owner": {
+    "name": "Will Eastbury"
+  },
+  "metadata": {
+    "description": "Governed reusable AI skills and the Skill Zero catalogue browser.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "skillcli-skill-zero",
+      "description": "Search, install, update, and remove governed skills across supported agent hosts.",
+      "version": "6.0.0",
+      "source": "plugins/skillcli-skill-zero"
+    },
+    {
+      "name": "skillcli-skill-one",
+      "description": "Submit proposed skills through a governed GitHub intake workflow.",
+      "version": "4.0.0",
+      "source": "plugins/skillcli-skill-one"
+    },
+    {
+      "name": "skillcli-skill-two",
+      "description": "Build a reusable skill when no approved catalogue skill matches.",
+      "version": "2.0.1",
+      "source": "plugins/skillcli-skill-two"
+    },
+    {
+      "name": "skillcli-prompt-quality-check",
+      "description": "Review and improve prompts for clarity, completeness, and safety.",
+      "version": "1.0.1",
+      "source": "plugins/skillcli-prompt-quality-check"
+    }
+  ]
+}

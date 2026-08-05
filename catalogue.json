@@ -1,0 +1,81 @@
+{
+  "schemaVersion": "1.0.0",
+  "library": {
+    "id": "skillcli-public",
+    "name": "skillcli Public Catalogue",
+    "description": "A public governed catalogue of reusable AI plugins and Markdown skills.",
+    "repository": "https://github.com/WillEastbury/skillcli",
+    "namespace": "WillEastbury/skillcli",
+    "defaultRef": "main",
+    "browserPlugin": "skillcli-skill-zero",
+    "updatePolicy": "notify-only",
+    "governance": "Only reviewed plugins merged through the protected repository process are published."
+  },
+  "taxonomy": {
+    "roles": [
+      {
+        "id": "business-user",
+        "name": "Business user"
+      },
+      {
+        "id": "developer",
+        "name": "Developer"
+      },
+      {
+        "id": "seller",
+        "name": "Seller"
+      },
+      {
+        "id": "data-analyst",
+        "name": "Data analyst"
+      },
+      {
+        "id": "skill-author",
+        "name": "Skill author"
+      },
+      {
+        "id": "library-maintainer",
+        "name": "Library maintainer"
+      },
+      {
+        "id": "security-reviewer",
+        "name": "Security reviewer"
+      }
+    ],
+    "taskCategories": [
+      {
+        "id": "skill-discovery",
+        "name": "Skill discovery"
+      },
+      {
+        "id": "skill-management",
+        "name": "Skill management"
+      },
+      {
+        "id": "skill-authoring",
+        "name": "Skill authoring"
+      },
+      {
+        "id": "skill-governance",
+        "name": "Skill governance"
+      },
+      {
+        "id": "prompt-engineering",
+        "name": "Prompt engineering"
+      },
+      {
+        "id": "data-analysis",
+        "name": "Data analysis"
+      },
+      {
+        "id": "sales-productivity",
+        "name": "Sales productivity"
+      },
+      {
+        "id": "software-engineering",
+        "name": "Software engineering"
+      }
+    ],
+    "maxResults": 10
+  }
+}

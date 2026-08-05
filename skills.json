@@ -1,16 +1,16 @@
 {
   "$schema": "schemas/skills.schema.json",
-  "manifestVersion": "4.0.0",
+  "manifestVersion": "5.0.0",
   "library": {
     "id": "skillcli-public",
     "name": "skillcli Public Catalogue",
-    "description": "A public governed catalogue of reusable AI Markdown skills.",
+    "description": "A public governed catalogue of reusable AI plugins and Markdown skills.",
     "repository": "https://github.com/WillEastbury/skillcli",
     "namespace": "WillEastbury/skillcli",
     "defaultRef": "main",
-    "browserSkillId": "skill-zero",
     "updatePolicy": "notify-only",
-    "governance": "Only approved skills merged through the protected repository review process are installable."
+    "governance": "Only reviewed plugins merged through the protected repository process are published.",
+    "browserSkillId": "skillcli-skill-zero"
   },
   "taxonomy": {
     "roles": [
@@ -81,12 +81,12 @@
   },
   "skills": [
     {
-      "id": "skill-zero",
+      "id": "skillcli-skill-zero",
       "name": "Skill Zero: Library Browser",
-      "version": "5.0.0",
+      "version": "6.0.0",
       "description": "Orchestrates the managed skillcli command to search, install, remove, and update approved skills across detected agent hosts.",
       "status": "approved",
-      "path": "skills/skill-zero",
+      "path": "plugins/skillcli-skill-zero/skills/skill-zero",
       "entrypoint": "SKILL.md",
       "roles": [
         "business-user",
@@ -102,15 +102,10 @@
         "skill-management"
       ],
       "keywords": [
-        "audit",
         "catalogue",
-        "discover",
-        "find",
-        "install",
-        "remove",
-        "search",
-        "library",
-        "update"
+        "discovery",
+        "skills",
+        "installer"
       ],
       "runtime": {
         "language": "python",
@@ -123,6 +118,7 @@
         ],
         "filesystem": "read-write",
         "shell": [
+          "copilot",
           "gh",
           "skillcli"
         ],
@@ -139,28 +135,24 @@
       "review": {
         "state": "approved",
         "reviewedBy": [
-          "Digital Native Skills Library maintainers"
+          "skillcli maintainers"
         ],
-        "reviewedAt": "2026-08-04"
+        "reviewedAt": "2026-08-05"
       },
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "9a3f70215ba738fa1ce70a82d43ed7b0befe7c69a660f899a6844cfaf0b15604"
-        },
-        {
-          "path": "skillcli.py",
-          "sha256": "d323456b847bcf8089a72a26973015da5a95a994fe475d7c9d2a519b1ed7b954"
+          "sha256": "da2c3a1e6bcadef718a678f18ae581c1850a20040a1fa86fc89715c00a0e2651"
         }
       ]
     },
     {
-      "id": "skill-one",
+      "id": "skillcli-skill-one",
       "name": "Skill One: GitHub Intake",
-      "version": "3.0.0",
+      "version": "4.0.0",
       "description": "Submits a proposed Markdown skill and supporting files on a review branch and opens a governed GitHub issue.",
       "status": "approved",
-      "path": "skills/skill-one",
+      "path": "plugins/skillcli-skill-one/skills/skill-one",
       "entrypoint": "SKILL.md",
       "roles": [
         "skill-author",
@@ -171,13 +163,10 @@
         "skill-governance"
       ],
       "keywords": [
-        "contribute",
         "github",
         "intake",
-        "issue",
-        "proposal",
         "review",
-        "submit"
+        "submission"
       ],
       "runtime": {
         "language": "none",
@@ -206,24 +195,24 @@
       "review": {
         "state": "approved",
         "reviewedBy": [
-          "Digital Native Skills Library maintainers"
+          "skillcli maintainers"
         ],
-        "reviewedAt": "2026-08-04"
+        "reviewedAt": "2026-08-05"
       },
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "137e90f90318cfd7b28502d27cf1b3cb5f9e800861d16e7e564814e6511800b4"
+          "sha256": "9764d9f1ad878fa7ff5db4d13b036d3a5d67d737ae983a1569629956818b3b05"
         }
       ]
     },
     {
-      "id": "skill-two",
+      "id": "skillcli-skill-two",
       "name": "Skill Two: Guided Skill Builder",
       "version": "2.0.1",
       "description": "Builds a new reusable skill from user-approved enterprise evidence when no catalogue skill is suitable.",
       "status": "approved",
-      "path": "skills/skill-two",
+      "path": "plugins/skillcli-skill-two/skills/skill-two",
       "entrypoint": "SKILL.md",
       "roles": [
         "business-user",
@@ -236,12 +225,9 @@
         "skill-authoring"
       ],
       "keywords": [
-        "build",
-        "create",
-        "dataverse",
-        "m365",
+        "authoring",
         "mcp",
-        "workiq"
+        "skill-builder"
       ],
       "runtime": {
         "language": "none",
@@ -269,9 +255,9 @@
       "review": {
         "state": "approved",
         "reviewedBy": [
-          "Digital Native Skills Library maintainers"
+          "skillcli maintainers"
         ],
-        "reviewedAt": "2026-08-04"
+        "reviewedAt": "2026-08-05"
       },
       "files": [
         {
@@ -281,12 +267,12 @@
       ]
     },
     {
-      "id": "prompt-quality-check",
+      "id": "skillcli-prompt-quality-check",
       "name": "Prompt Quality Check",
       "version": "1.0.1",
       "description": "Reviews a prompt for clarity, context, constraints, output shape, and safety before producing an improved version.",
       "status": "approved",
-      "path": "skills/prompt-quality-check",
+      "path": "plugins/skillcli-prompt-quality-check/skills/prompt-quality-check",
       "entrypoint": "SKILL.md",
       "roles": [
         "business-user",
@@ -299,11 +285,9 @@
         "prompt-engineering"
       ],
       "keywords": [
-        "clarity",
         "prompt",
         "quality",
-        "review",
-        "rewrite"
+        "review"
       ],
       "runtime": {
         "language": "python",
@@ -324,9 +308,9 @@
       "review": {
         "state": "approved",
         "reviewedBy": [
-          "Digital Native Skills Library maintainers"
+          "skillcli maintainers"
         ],
-        "reviewedAt": "2026-08-03"
+        "reviewedAt": "2026-08-05"
       },
       "files": [
         {

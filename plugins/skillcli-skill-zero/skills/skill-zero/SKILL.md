@@ -1,7 +1,7 @@
 ---
 name: "Skill Zero: Library Browser"
 description: "Orchestrates the managed skillcli command to search, install, remove, and update approved skills across detected agent hosts."
-version: "5.0.0"
+version: "6.0.0"
 skill-id: "skill-zero"
 ---
 
@@ -9,11 +9,10 @@ skill-id: "skill-zero"
 
 ## Purpose
 
-Use the current AI agent as the interface to the governed skill library by orchestrating
-the trusted `skillcli` command.
+Use the current AI agent as the interface to governed plugin marketplaces.
 
-Do not reproduce catalogue or installation logic in conversation. Run the CLI and
-interpret its table output for the user.
+Prefer the trusted `skillcli` command when it is installed. In GitHub Copilot CLI, the
+native `/plugin` interface is also supported.
 
 This skill must be installed through the host's trusted native or administrator-managed
 skill deployment mechanism. Repository content cannot bootstrap or authorise its own
@@ -29,6 +28,16 @@ skillcli search --role <role-id> --query "<user need>"
 
 Present the returned table. Do not show more results than the CLI returns.
 
+If `skillcli` is unavailable but this skill is running as a Copilot CLI plugin, browse
+the registered marketplaces natively:
+
+```text
+copilot plugin marketplace list
+copilot plugin marketplace browse <marketplace-name> --json
+```
+
+Filter the returned plugin metadata by the user's role and task.
+
 ## Install
 
 On an explicit user selection, run:
@@ -40,6 +49,12 @@ skillcli install --skill <owner>/<repo>/<skill-id>
 The CLI installs to every detected Copilot CLI, Scout managed-skills, and Co-Work
 OneDrive skills location. Report its result table exactly. Do not manually copy files.
 
+For a native Copilot CLI-only install, use:
+
+```text
+copilot plugin install <plugin-name>@<marketplace-name>
+```
+
 ## Updates
 
 Run one of:
@@ -50,6 +65,13 @@ skillcli update --all
 ```
 
 Only run update after an explicit user request.
+
+Native Copilot CLI equivalents are:
+
+```text
+copilot plugin update <plugin-name>
+copilot plugin update --all
+```
 
 ## No match
 
@@ -65,3 +87,9 @@ skillcli remove --skill <owner>/<repo>/<skill-id>
 ```
 
 Report any identity mismatch or local-file refusal rather than bypassing it.
+
+Native Copilot CLI equivalent:
+
+```text
+copilot plugin uninstall <plugin-name>
+```

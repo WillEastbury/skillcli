@@ -1,0 +1,66 @@
+{
+  "schemaVersion": "1.0.0",
+  "skillId": "skill-zero",
+  "skillRoot": "skills/skill-zero",
+  "roles": [
+    "business-user",
+    "developer",
+    "seller",
+    "data-analyst",
+    "skill-author",
+    "library-maintainer",
+    "security-reviewer"
+  ],
+  "taskCategories": [
+    "skill-discovery",
+    "skill-management"
+  ],
+  "runtime": {
+    "language": "python",
+    "dependencies": []
+  },
+  "capabilities": {
+    "network": [
+      "github.com",
+      "api.github.com"
+    ],
+    "filesystem": "read-write",
+    "shell": [
+      "copilot",
+      "gh",
+      "skillcli"
+    ],
+    "mcpServers": [],
+    "authentication": [
+      "host-managed GitHub access"
+    ]
+  },
+  "review": {
+    "state": "approved",
+    "reviewedBy": [
+      "skillcli maintainers"
+    ],
+    "reviewedAt": "2026-08-05"
+  },
+  "toolFiles": [
+    "scripts/skillcli.py",
+    "scripts/skillcli_core.py"
+  ],
+  "files": [
+    {
+      "path": "scripts/skillcli.py",
+      "sha256": "3138ce2cbd00ac7d7fa845bf612736e61260d5c4033e37554d4f2ee6174d4e46",
+      "target": "tool"
+    },
+    {
+      "path": "scripts/skillcli_core.py",
+      "sha256": "c18898a5c1eec1bdf1ab71ed537d5d05376123b71516bf6f7ab341bb5714d1c7",
+      "target": "tool"
+    },
+    {
+      "path": "skills/skill-zero/SKILL.md",
+      "sha256": "da2c3a1e6bcadef718a678f18ae581c1850a20040a1fa86fc89715c00a0e2651",
+      "target": "skill"
+    }
+  ]
+}

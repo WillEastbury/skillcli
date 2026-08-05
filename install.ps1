@@ -73,11 +73,17 @@ if ($sourceIsPrivate) {
     $sourcesCommit = Get-PublicCommit $SourcesRepository $SourcesRef
 }
 
-$cliContent = Get-RepositoryFile `
+$pluginPath = 'plugins/skillcli-skill-zero'
+$metadataContent = Get-RepositoryFile `
     $PublicRepository `
     $publicCommit `
-    'skills/skill-zero/skillcli.py' `
+    "$pluginPath/skillcli.json" `
     $false
+$pluginMetadata = $metadataContent | ConvertFrom-Json
+$toolFiles = @($pluginMetadata.files | Where-Object { $_.target -eq 'tool' })
+if ($toolFiles.Count -lt 2) {
+    throw 'Skill Zero plugin does not declare the required CLI tool files.'
+}
 $sourcesContent = Get-RepositoryFile `
     $SourcesRepository `
     $sourcesCommit `
@@ -86,14 +92,31 @@ $sourcesContent = Get-RepositoryFile `
 
 New-Item -ItemType Directory -Force -Path $ToolDirectory | Out-Null
 $cliPath = Join-Path $ToolDirectory 'skillcli.py'
+$corePath = Join-Path $ToolDirectory 'skillcli_core.py'
 $wrapperPath = Join-Path $ToolDirectory 'skillcli.cmd'
 $sourcesPath = Join-Path $ToolDirectory 'sources.json'
 
-[IO.File]::WriteAllText(
-    $cliPath,
-    [string]$cliContent,
-    [Text.UTF8Encoding]::new($false)
-)
+foreach ($record in $toolFiles) {
+    $content = Get-RepositoryFile `
+        $PublicRepository `
+        $publicCommit `
+        "$pluginPath/$($record.path)" `
+        $false
+    $normalized = ([string]$content).Replace("`r`n", "`n").Replace("`r", "`n")
+    $bytes = [Text.UTF8Encoding]::new($false).GetBytes($normalized)
+    $actual = [Convert]::ToHexString(
+        [Security.Cryptography.SHA256]::HashData($bytes)
+    ).ToLowerInvariant()
+    if ($actual -ne $record.sha256) {
+        throw "Checksum mismatch for $($record.path)."
+    }
+    $destination = switch ([IO.Path]::GetFileName($record.path)) {
+        'skillcli.py' { $cliPath }
+        'skillcli_core.py' { $corePath }
+        default { throw "Unexpected Skill Zero tool file: $($record.path)" }
+    }
+    [IO.File]::WriteAllBytes($destination, $bytes)
+}
 [IO.File]::WriteAllText(
     $sourcesPath,
     [string]$sourcesContent,
@@ -118,7 +141,7 @@ if ($env:SKILLCLI_NO_PATH_UPDATE -ne '1') {
 }
 $env:Path = "$ToolDirectory;$env:Path"
 
-& $wrapperPath update --skill WillEastbury/skillcli/skill-zero
+& $wrapperPath update --skill WillEastbury/skillcli/skillcli-skill-zero
 if ($LASTEXITCODE -ne 0) {
     throw 'Skill Zero installation failed.'
 }

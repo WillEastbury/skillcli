@@ -1,0 +1,16 @@
+{
+  "name": "skillcli-prompt-quality-check",
+  "description": "Review and improve prompts for clarity, completeness, and safety.",
+  "version": "1.0.1",
+  "author": {
+    "name": "Will Eastbury"
+  },
+  "repository": "https://github.com/WillEastbury/skillcli",
+  "license": "MIT",
+  "keywords": [
+    "prompt",
+    "quality",
+    "review"
+  ],
+  "skills": "skills/"
+}

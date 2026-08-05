@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "1.0.0",
+  "skillId": "skill-one",
+  "skillRoot": "skills/skill-one",
+  "roles": [
+    "skill-author",
+    "library-maintainer"
+  ],
+  "taskCategories": [
+    "skill-authoring",
+    "skill-governance"
+  ],
+  "runtime": {
+    "language": "none",
+    "dependencies": []
+  },
+  "capabilities": {
+    "network": [
+      "github.com",
+      "api.github.com"
+    ],
+    "filesystem": "read-write",
+    "shell": [
+      "git",
+      "skillcli"
+    ],
+    "mcpServers": [],
+    "authentication": [
+      "host-managed GitHub access"
+    ]
+  },
+  "review": {
+    "state": "approved",
+    "reviewedBy": [
+      "skillcli maintainers"
+    ],
+    "reviewedAt": "2026-08-05"
+  },
+  "toolFiles": [],
+  "files": [
+    {
+      "path": "skills/skill-one/SKILL.md",
+      "sha256": "9764d9f1ad878fa7ff5db4d13b036d3a5d67d737ae983a1569629956818b3b05",
+      "target": "skill"
+    }
+  ]
+}

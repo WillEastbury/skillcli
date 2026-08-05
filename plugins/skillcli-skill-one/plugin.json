@@ -1,0 +1,17 @@
+{
+  "name": "skillcli-skill-one",
+  "description": "Submit proposed skills through a governed GitHub intake workflow.",
+  "version": "4.0.0",
+  "author": {
+    "name": "Will Eastbury"
+  },
+  "repository": "https://github.com/WillEastbury/skillcli",
+  "license": "MIT",
+  "keywords": [
+    "github",
+    "intake",
+    "review",
+    "submission"
+  ],
+  "skills": "skills/"
+}

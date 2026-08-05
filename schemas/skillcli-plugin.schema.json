@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/WillEastbury/skillcli/schemas/skillcli-plugin.schema.json",
+  "title": "skillcli plugin metadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "skillId",
+    "skillRoot",
+    "roles",
+    "taskCategories",
+    "runtime",
+    "capabilities",
+    "review",
+    "toolFiles",
+    "files"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "skillId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "skillRoot": {
+      "type": "string",
+      "pattern": "^[^\\\\/]+(?:/[^\\\\/]+)*$"
+    },
+    "roles": {
+      "$ref": "#/$defs/idList"
+    },
+    "taskCategories": {
+      "$ref": "#/$defs/idList"
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "language",
+        "dependencies"
+      ],
+      "properties": {
+        "language": {
+          "enum": [
+            "none",
+            "python",
+            "javascript",
+            "typescript",
+            "powershell",
+            "other"
+          ]
+        },
+        "dependencies": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "network",
+        "filesystem",
+        "shell",
+        "mcpServers",
+        "authentication"
+      ],
+      "properties": {
+        "network": {
+          "$ref": "#/$defs/textList"
+        },
+        "filesystem": {
+          "enum": [
+            "none",
+            "read-only",
+            "read-write"
+          ]
+        },
+        "shell": {
+          "$ref": "#/$defs/textList"
+        },
+        "mcpServers": {
+          "$ref": "#/$defs/textList"
+        },
+        "authentication": {
+          "$ref": "#/$defs/textList"
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "reviewedBy",
+        "reviewedAt"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "pending",
+            "approved",
+            "rejected"
+          ]
+        },
+        "reviewedBy": {
+          "$ref": "#/$defs/textList"
+        },
+        "reviewedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        }
+      }
+    },
+    "toolFiles": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[^\\\\/]+(?:/[^\\\\/]+)*$"
+      }
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "sha256",
+          "target"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^[^\\\\/]+(?:/[^\\\\/]+)*$"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "target": {
+            "enum": [
+              "skill",
+              "tool"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "idList": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+      }
+    },
+    "textList": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

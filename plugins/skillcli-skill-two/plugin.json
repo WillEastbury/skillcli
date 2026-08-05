@@ -1,0 +1,16 @@
+{
+  "name": "skillcli-skill-two",
+  "description": "Build a reusable skill when no approved catalogue skill matches.",
+  "version": "2.0.1",
+  "author": {
+    "name": "Will Eastbury"
+  },
+  "repository": "https://github.com/WillEastbury/skillcli",
+  "license": "MIT",
+  "keywords": [
+    "authoring",
+    "mcp",
+    "skill-builder"
+  ],
+  "skills": "skills/"
+}
