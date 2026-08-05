@@ -13,8 +13,16 @@ Marketplace: [github.com/WillEastbury/skillcli](https://github.com/WillEastbury/
 
 ### Scout, Co-Work, and cross-host CLI
 
+Windows:
+
 ```powershell
 $p=Join-Path $env:TEMP 'skillcli-install.ps1'; iwr -Headers @{Accept='application/vnd.github.raw+json';'User-Agent'='skillcli'} 'https://api.github.com/repos/WillEastbury/skillcli/contents/install.ps1?ref=main' -OutFile $p; Unblock-File $p; & $p; Remove-Item $p
+```
+
+macOS or Linux:
+
+```bash
+p="$(mktemp)"; curl -fsSL "https://raw.githubusercontent.com/WillEastbury/skillcli/main/install.sh" -o "$p"; bash "$p"; rm -f "$p"
 ```
 
 `skillcli` is an MIT-licensed, agent-friendly CLI for searching and installing governed
@@ -44,6 +52,9 @@ into detected:
 - GitHub Copilot CLI: `%USERPROFILE%\.copilot\skills`
 - Scout: `%USERPROFILE%\.scout\m-skills`
 - Copilot Co-Work: `%OneDrive%\Documents\Cowork\Skills`
+
+On macOS, Scout uses `~/.copilot/m-skills` and Co-Work discovery checks
+`~/Library/CloudStorage/OneDrive-*/Documents/Cowork/Skills`.
 
 The Co-Work copy includes a local catalogue snapshot for import through Customize.
 
