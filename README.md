@@ -2,6 +2,17 @@
 
 ## Install
 
+### GitHub Copilot CLI — native marketplace
+
+```text
+/plugin marketplace add WillEastbury/skillcli
+/plugin install skillcli-skill-zero@skillcli
+```
+
+Marketplace: [github.com/WillEastbury/skillcli](https://github.com/WillEastbury/skillcli)
+
+### Scout, Co-Work, and cross-host CLI
+
 ```powershell
 $p=Join-Path $env:TEMP 'skillcli-install.ps1'; iwr -Headers @{Accept='application/vnd.github.raw+json';'User-Agent'='skillcli'} 'https://api.github.com/repos/WillEastbury/skillcli/contents/install.ps1?ref=main' -OutFile $p; Unblock-File $p; & $p; Remove-Item $p
 ```
