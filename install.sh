@@ -9,7 +9,11 @@ TOOL_DIRECTORY="${SKILLCLI_TOOL_DIRECTORY:-$HOME/.local/share/skillcli}"
 BIN_DIRECTORY="${SKILLCLI_BIN_DIRECTORY:-$HOME/.local/bin}"
 
 command -v python3 >/dev/null 2>&1 || {
-  echo "Python 3 is required." >&2
+  echo "Python 3.10 or newer is required." >&2
+  exit 1
+}
+python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' || {
+  echo "Python 3.10 or newer is required." >&2
   exit 1
 }
 command -v curl >/dev/null 2>&1 || {

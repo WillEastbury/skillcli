@@ -23,7 +23,11 @@ $ToolDirectory = if ($env:SKILLCLI_TOOL_DIRECTORY) {
 }
 
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
-    throw 'Python 3 is required.'
+    throw 'Python 3.10 or newer is required.'
+}
+$pythonVersion = & python -c "import sys; print('.'.join(map(str, sys.version_info[:3])))"
+if ($LASTEXITCODE -ne 0 -or [version]$pythonVersion -lt [version]'3.10') {
+    throw "Python 3.10 or newer is required. Found: $pythonVersion"
 }
 if ($SourcesRepository -notmatch '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$') {
     throw 'SKILLCLI_SOURCES_REPOSITORY must use OWNER/REPO format.'
