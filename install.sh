@@ -3,7 +3,12 @@ set -euo pipefail
 
 PUBLIC_REPOSITORY="WillEastbury/skillcli"
 PUBLIC_REF="${SKILLCLI_PUBLIC_REF:-main}"
-SOURCES_REPOSITORY="${SKILLCLI_SOURCES_REPOSITORY:-$PUBLIC_REPOSITORY}"
+PRIVATE_MODE="${SKILLCLI_PRIVATE_MODE:-0}"
+if [[ "$PRIVATE_MODE" == "1" ]]; then
+  SOURCES_REPOSITORY="${SKILLCLI_SOURCES_REPOSITORY:-$PUBLIC_REPOSITORY}"
+else
+  SOURCES_REPOSITORY="$PUBLIC_REPOSITORY"
+fi
 SOURCES_REF="${SKILLCLI_SOURCES_REF:-main}"
 TOOL_DIRECTORY="${SKILLCLI_TOOL_DIRECTORY:-$HOME/.local/share/skillcli}"
 BIN_DIRECTORY="${SKILLCLI_BIN_DIRECTORY:-$HOME/.local/bin}"
@@ -29,7 +34,7 @@ public_commit="$(
 )"
 
 source_is_private=0
-if [[ "$SOURCES_REPOSITORY" != "$PUBLIC_REPOSITORY" ]]; then
+if [[ "$PRIVATE_MODE" == "1" && "$SOURCES_REPOSITORY" != "$PUBLIC_REPOSITORY" ]]; then
   source_is_private=1
   command -v gh >/dev/null 2>&1 || {
     echo "GitHub CLI is required for private catalogue $SOURCES_REPOSITORY." >&2

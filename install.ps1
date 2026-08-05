@@ -6,7 +6,8 @@ $PublicRef = if ($env:SKILLCLI_PUBLIC_REF) {
 } else {
     'main'
 }
-$SourcesRepository = if ($env:SKILLCLI_SOURCES_REPOSITORY) {
+$privateMode = $env:SKILLCLI_PRIVATE_MODE -eq '1'
+$SourcesRepository = if ($privateMode -and $env:SKILLCLI_SOURCES_REPOSITORY) {
     $env:SKILLCLI_SOURCES_REPOSITORY
 } else {
     $PublicRepository
@@ -66,7 +67,7 @@ function Get-RepositoryFile(
 }
 
 $publicCommit = Get-PublicCommit $PublicRepository $PublicRef
-$sourceIsPrivate = $SourcesRepository -ne $PublicRepository
+$sourceIsPrivate = $privateMode -and $SourcesRepository -ne $PublicRepository
 
 if ($sourceIsPrivate) {
     if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
