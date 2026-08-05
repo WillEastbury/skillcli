@@ -9,6 +9,7 @@ import re
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 import urllib.error
 import urllib.request
@@ -356,6 +357,16 @@ def one_drive_root() -> Path | None:
         value = os.environ.get(variable)
         if value and Path(value).exists():
             return Path(value)
+    if sys.platform == "darwin":
+        cloud_storage = Path.home() / "Library" / "CloudStorage"
+        if cloud_storage.is_dir():
+            candidates = sorted(
+                path
+                for path in cloud_storage.glob("OneDrive-*")
+                if path.is_dir()
+            )
+            if candidates:
+                return candidates[0]
     return None
 
 
@@ -382,6 +393,8 @@ def filesystem_destinations() -> dict[str, Path]:
         result["copilot-cli-filesystem"] = home / ".copilot" / "skills"
     if (home / ".scout").exists():
         result["scout"] = home / ".scout" / "m-skills"
+    elif sys.platform == "darwin" and (home / ".copilot").exists():
+        result["scout"] = home / ".copilot" / "m-skills"
     drive = one_drive_root()
     if drive and (drive / "Documents" / "Cowork").exists():
         result["copilot-cowork"] = drive / "Documents" / "Cowork" / "Skills"

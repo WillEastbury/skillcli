@@ -12,6 +12,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -452,6 +453,43 @@ class NativeCopilotAdapterTests(unittest.TestCase):
             ],
             {"plugins/example-plugin/skills/example-skill/SKILL.md": b"x"},
         )
+
+
+class MacOSDestinationTests(unittest.TestCase):
+    def test_detects_macos_scout_and_cowork_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            (home / ".copilot").mkdir()
+            one_drive = (
+                home
+                / "Library"
+                / "CloudStorage"
+                / "OneDrive-Contoso"
+                / "Documents"
+                / "Cowork"
+            )
+            one_drive.mkdir(parents=True)
+            globals_dict = CORE["filesystem_destinations"].__globals__
+            original_platform = globals_dict["sys"].platform
+            globals_dict["sys"].platform = "darwin"
+            try:
+                with mock.patch.dict(
+                    os.environ,
+                    {"SKILLCLI_DISABLE_NATIVE_COPILOT": "1"},
+                    clear=True,
+                ):
+                    with mock.patch.object(Path, "home", return_value=home):
+                        destinations = CORE["filesystem_destinations"]()
+                self.assertEqual(
+                    destinations["scout"],
+                    home / ".copilot" / "m-skills",
+                )
+                self.assertEqual(
+                    destinations["copilot-cowork"],
+                    one_drive / "Skills",
+                )
+            finally:
+                globals_dict["sys"].platform = original_platform
 
 
 if __name__ == "__main__":
