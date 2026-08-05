@@ -519,6 +519,100 @@ class MarketplaceRegistrationTests(unittest.TestCase):
             CORE["probe_source"]("../private")
 
 
+class SelfUpdateTests(unittest.TestCase):
+    def test_self_update_replaces_verified_cli_files(self) -> None:
+        cli = b"print('new cli')\n"
+        core = b"VALUE = 'new core'\n"
+        source = FakeSource(
+            {
+                "plugins/skillcli-skill-zero/scripts/skillcli.py": cli,
+                "plugins/skillcli-skill-zero/scripts/skillcli_core.py": core,
+            },
+            "WillEastbury/skillcli",
+        )
+        selected = CORE["Plugin"](
+            source,
+            "skillcli",
+            "plugins/skillcli-skill-zero",
+            {
+                "name": "skillcli-skill-zero",
+                "version": "9.9.9",
+            },
+            {
+                "files": [
+                    {
+                        "path": "scripts/skillcli.py",
+                        "sha256": hashlib.sha256(cli).hexdigest(),
+                        "target": "tool",
+                    },
+                    {
+                        "path": "scripts/skillcli_core.py",
+                        "sha256": hashlib.sha256(core).hexdigest(),
+                        "target": "tool",
+                    },
+                ]
+            },
+        )
+        catalogues = FakeCatalogues(selected)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "skillcli.py").write_bytes(b"old cli")
+            (root / "skillcli_core.py").write_bytes(b"old core")
+            globals_dict = CORE["self_update"].__globals__
+            original_install = globals_dict["install_or_update"]
+            globals_dict["install_or_update"] = lambda *args: [
+                {
+                    "host": "test",
+                    "status": "updated",
+                    "version": "9.9.9",
+                    "source": "public",
+                    "destination": "test",
+                }
+            ]
+            with mock.patch.dict(
+                os.environ,
+                {"SKILLCLI_TOOL_DIRECTORY": str(root)},
+                clear=False,
+            ):
+                try:
+                    result = CORE["self_update"](catalogues)
+                finally:
+                    globals_dict["install_or_update"] = original_install
+            self.assertEqual((root / "skillcli.py").read_bytes(), cli)
+            self.assertEqual((root / "skillcli_core.py").read_bytes(), core)
+            self.assertEqual(result["version"], "9.9.9")
+
+    def test_self_update_rejects_bad_checksum(self) -> None:
+        selected = CORE["Plugin"](
+            FakeSource(
+                {
+                    "plugins/skillcli-skill-zero/scripts/skillcli.py": b"cli",
+                    "plugins/skillcli-skill-zero/scripts/skillcli_core.py": b"core",
+                },
+                "WillEastbury/skillcli",
+            ),
+            "skillcli",
+            "plugins/skillcli-skill-zero",
+            {"name": "skillcli-skill-zero", "version": "9.9.9"},
+            {
+                "files": [
+                    {
+                        "path": "scripts/skillcli.py",
+                        "sha256": "0" * 64,
+                        "target": "tool",
+                    },
+                    {
+                        "path": "scripts/skillcli_core.py",
+                        "sha256": hashlib.sha256(b"core").hexdigest(),
+                        "target": "tool",
+                    },
+                ]
+            },
+        )
+        with self.assertRaisesRegex(ValueError, "checksum mismatch"):
+            CORE["plugin_tool_content"](selected)
+
+
 class MacOSDestinationTests(unittest.TestCase):
     def test_detects_macos_scout_and_cowork_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -694,6 +694,85 @@ def plugin_skill_content(plugin: Plugin) -> dict[str, bytes]:
     return content
 
 
+def plugin_tool_content(plugin: Plugin) -> dict[str, bytes]:
+    content: dict[str, bytes] = {}
+    keys: set[str] = set()
+    for record in plugin.metadata["files"]:
+        if record.get("target") != "tool":
+            continue
+        path = record.get("path")
+        digest = record.get("sha256")
+        if not isinstance(path, str) or not isinstance(digest, str):
+            raise ValueError(f"invalid tool file record in {plugin.qualified_id}")
+        filename = PurePosixPath(path).name
+        if filename not in {"skillcli.py", "skillcli_core.py"}:
+            raise ValueError(f"unexpected CLI tool file: {path}")
+        key = windows_key(filename)
+        if key in keys:
+            raise ValueError(f"Windows tool path collision: {filename}")
+        keys.add(key)
+        value = plugin.source.read(f"{plugin.path}/{safe_path(path).as_posix()}")
+        if hashlib.sha256(value).hexdigest() != digest:
+            raise ValueError(f"checksum mismatch: {plugin.qualified_id}/{path}")
+        content[filename] = value
+    if set(content) != {"skillcli.py", "skillcli_core.py"}:
+        raise ValueError("Skill Zero plugin does not declare both CLI tool files")
+    return content
+
+
+def self_update(catalogues: Catalogues) -> dict[str, Any]:
+    qualified_id = "WillEastbury/skillcli/skillcli-skill-zero"
+    plugin = catalogues.plugin(qualified_id)
+    content = plugin_tool_content(plugin)
+    configured = os.environ.get("SKILLCLI_TOOL_DIRECTORY")
+    tool_root = (
+        Path(configured).expanduser().resolve()
+        if configured
+        else Path(__file__).resolve().parent
+    )
+    reject_links(tool_root)
+    tool_root.mkdir(parents=True, exist_ok=True)
+    transaction = Path(tempfile.mkdtemp(prefix=".skillcli-self-update-", dir=tool_root))
+    staged = transaction / "staged"
+    backup = transaction / "backup"
+    staged.mkdir()
+    backup.mkdir()
+    replaced: list[str] = []
+    try:
+        for filename, value in content.items():
+            path = staged / filename
+            path.write_bytes(value)
+            expected = hashlib.sha256(value).hexdigest()
+            if hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+                raise ValueError(f"staged CLI checksum mismatch: {filename}")
+        for filename in sorted(content):
+            current = tool_root / filename
+            if current.exists():
+                current.replace(backup / filename)
+            (staged / filename).replace(current)
+            replaced.append(filename)
+        shutil.rmtree(transaction)
+    except (OSError, ValueError):
+        for filename in reversed(replaced):
+            current = tool_root / filename
+            if current.exists():
+                current.unlink()
+            old = backup / filename
+            if old.exists():
+                old.replace(current)
+        if transaction.exists():
+            shutil.rmtree(transaction)
+        raise
+    host_results = install_or_update(catalogues, qualified_id, True)
+    return {
+        "version": plugin.manifest["version"],
+        "commit": plugin.source.resolve(),
+        "toolDirectory": str(tool_root),
+        "files": sorted(content),
+        "hosts": host_results,
+    }
+
+
 def qualified_folder(qualified_id: str) -> str:
     if not QUALIFIED_ID_PATTERN.fullmatch(qualified_id):
         raise ValueError("plugin ID must use OWNER/REPO/plugin-name")

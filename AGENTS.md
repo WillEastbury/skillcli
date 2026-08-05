@@ -23,6 +23,7 @@ skillcli remove --skill <owner>/<repo>/<plugin-name>
 skillcli update --skill <owner>/<repo>/<plugin-name>
 skillcli update --all
 skillcli register <owner>/<repo>
+skillcli self-update
 ```
 
 Skill Zero and Skill One orchestrate this CLI. Do not duplicate its source merging,

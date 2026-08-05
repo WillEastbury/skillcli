@@ -14,6 +14,7 @@ from skillcli_core import (
     remove_plugin,
     register_source,
     search_plugins,
+    self_update,
 )
 
 
@@ -56,6 +57,7 @@ def parser() -> argparse.ArgumentParser:
     register = commands.add_parser("register")
     register.add_argument("repository")
     register.add_argument("--ref", default="main")
+    commands.add_parser("self-update")
     return result
 
 
@@ -75,6 +77,29 @@ def main() -> int:
                             result["status"],
                             result["nativeCopilot"],
                         ]
+                    ],
+                )
+            )
+            return 0
+        if args.command == "self-update":
+            result = self_update(Catalogues())
+            print(
+                f"skillcli updated to {result['version']} "
+                f"from commit {result['commit']}"
+            )
+            print(f"Tool directory: {result['toolDirectory']}")
+            print(
+                table(
+                    ["Host", "Status", "Version", "Source", "Destination"],
+                    [
+                        [
+                            row["host"],
+                            row["status"],
+                            row["version"],
+                            row["source"],
+                            row["destination"],
+                        ]
+                        for row in result["hosts"]
                     ],
                 )
             )
