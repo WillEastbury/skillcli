@@ -475,7 +475,7 @@ class MarketplaceRegistrationTests(unittest.TestCase):
                 encoding="utf-8",
             )
             source = SimpleNamespace(
-                config=SimpleNamespace(private=True),
+                config=SimpleNamespace(private=True, gh_user="managed-user"),
             )
             globals_dict = CORE["register_source"].__globals__
             originals = {
@@ -511,6 +511,7 @@ class MarketplaceRegistrationTests(unittest.TestCase):
             ]
             self.assertEqual(len(private_sources), 1)
             self.assertTrue(private_sources[0]["private"])
+            self.assertEqual(private_sources[0]["ghUser"], "managed-user")
             self.assertEqual(first["status"], "registered")
             self.assertEqual(second["status"], "already registered")
 

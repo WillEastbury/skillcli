@@ -95,18 +95,42 @@ def reject_links(path: Path) -> None:
                 raise ValueError(f"destination contains a link/reparse point: {child}")
 
 
-def run(arguments: list[str], timeout: int = 60) -> subprocess.CompletedProcess[bytes]:
+def run(
+    arguments: list[str],
+    timeout: int = 60,
+    environment: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[bytes]:
     return subprocess.run(
         arguments,
         check=False,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         timeout=timeout,
+        env=environment,
     )
 
 
-def gh(arguments: list[str]) -> bytes:
-    result = run(["gh", *arguments])
+def gh(arguments: list[str], user: str | None = None) -> bytes:
+    environment = os.environ.copy()
+    if user and not environment.get("GH_TOKEN"):
+        token_result = run(
+            [
+                "gh",
+                "auth",
+                "token",
+                "--hostname",
+                "github.com",
+                "--user",
+                user,
+            ]
+        )
+        if token_result.returncode:
+            raise RuntimeError(
+                token_result.stderr.decode("utf-8", errors="replace").strip()
+                or f"cannot obtain token for GitHub account {user}"
+            )
+        environment["GH_TOKEN"] = token_result.stdout.decode("utf-8").strip()
+    result = run(["gh", *arguments], environment=environment)
     if result.returncode:
         message = result.stderr.decode("utf-8", errors="replace").strip()
         raise RuntimeError(message or f"gh exited with code {result.returncode}")
@@ -199,6 +223,7 @@ class SourceConfig:
     repository: str
     ref: str
     private: bool
+    gh_user: str | None = None
 
 
 class Source:
@@ -209,7 +234,9 @@ class Source:
 
     def api_json(self, endpoint: str) -> dict[str, Any]:
         if self.config.private:
-            value = json.loads(gh(["api", endpoint]).decode("utf-8"))
+            value = json.loads(
+                gh(["api", endpoint], self.config.gh_user).decode("utf-8")
+            )
             if not isinstance(value, dict):
                 raise RuntimeError(f"GitHub returned invalid JSON for {endpoint}")
             return value
@@ -240,7 +267,8 @@ class Source:
                     "-H",
                     "Accept: application/vnd.github.raw+json",
                     endpoint,
-                ]
+                ],
+                self.config.gh_user,
             )
         else:
             value = public_bytes(
@@ -286,6 +314,7 @@ class Catalogues:
                         value.get("ref", "main"),
                     ),
                     private=bool(value.get("private", False)),
+                    gh_user=value.get("ghUser"),
                 )
             )
             for value in values
@@ -363,6 +392,11 @@ class Catalogues:
                     "id": source.config.id,
                     "repository": source.config.repository,
                     "ref": source.config.ref,
+                    **(
+                        {"ghUser": source.config.gh_user}
+                        if source.config.gh_user
+                        else {}
+                    ),
                 }
                 for source in self.sources
             ],
@@ -397,6 +431,11 @@ def probe_source(repository: str, ref: str = "main") -> tuple[Source, str]:
                 repository=repository,
                 ref=ref,
                 private=private,
+                gh_user=(
+                    os.environ.get("SKILLCLI_GH_USER")
+                    if private
+                    else None
+                ),
             )
         )
         try:
@@ -438,6 +477,9 @@ def register_source(repository: str, ref: str = "main") -> dict[str, str]:
         "ref": ref,
         "private": source.config.private,
     }
+    gh_user = getattr(source.config, "gh_user", None)
+    if source.config.private and gh_user:
+        record["ghUser"] = gh_user
     if existing is None:
         used_ids = {
             item.get("id")

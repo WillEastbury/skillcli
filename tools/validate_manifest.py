@@ -44,6 +44,11 @@ def validate_sources(root: Path) -> list[str]:
             errors.append(f"{label}.ref is invalid")
         if not isinstance(source.get("private"), bool):
             errors.append(f"{label}.private must be boolean")
+        gh_user = source.get("ghUser")
+        if gh_user is not None and (
+            not isinstance(gh_user, str) or not gh_user.strip()
+        ):
+            errors.append(f"{label}.ghUser must be a non-empty string")
     return errors
 
 
