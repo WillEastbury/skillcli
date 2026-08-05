@@ -81,9 +81,14 @@ def full_catalogue(manifest: dict[str, Any]) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true")
+    parser.add_argument(
+        "--root",
+        type=Path,
+        default=Path(__file__).resolve().parents[1],
+    )
     args = parser.parse_args()
 
-    root = Path(__file__).resolve().parents[1]
+    root = args.root.resolve()
     manifest = build(root, update=False)
 
     readme_path = root / "README.md"
