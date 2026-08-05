@@ -108,9 +108,13 @@ foreach ($record in $toolFiles) {
         $false
     $normalized = ([string]$content).Replace("`r`n", "`n").Replace("`r", "`n")
     $bytes = [Text.UTF8Encoding]::new($false).GetBytes($normalized)
-    $actual = [Convert]::ToHexString(
-        [Security.Cryptography.SHA256]::HashData($bytes)
-    ).ToLowerInvariant()
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    try {
+        $hash = $sha256.ComputeHash($bytes)
+    } finally {
+        $sha256.Dispose()
+    }
+    $actual = -join ($hash | ForEach-Object { $_.ToString('x2') })
     if ($actual -ne $record.sha256) {
         throw "Checksum mismatch for $($record.path)."
     }
