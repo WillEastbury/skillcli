@@ -149,8 +149,8 @@
     {
       "id": "skillcli-skill-one",
       "name": "Skill One: GitHub Intake",
-      "version": "4.1.0",
-      "description": "Submits a proposed Markdown skill and supporting files on a review branch and opens a governed GitHub issue.",
+      "version": "5.0.0",
+      "description": "Submits a proposed Markdown skill as a ready-to-merge plugin package on a review branch and opens a governed pull request.",
       "status": "approved",
       "path": "plugins/skillcli-skill-one/skills/skill-one",
       "entrypoint": "SKILL.md",
@@ -202,14 +202,14 @@
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "c6924cb66f205333df8cd56269c726aeef3edabaa4f94f8f69eacc470a978f7e"
+          "sha256": "71744fea756072dcf75cc6d069e6462e1be4c19d24ebc1848e8940e0022c7675"
         }
       ]
     },
     {
       "id": "skillcli-skill-two",
       "name": "Skill Two: Guided Skill Builder",
-      "version": "2.1.0",
+      "version": "3.0.0",
       "description": "Builds a new reusable skill from user-approved enterprise evidence when no catalogue skill is suitable.",
       "status": "approved",
       "path": "plugins/skillcli-skill-two/skills/skill-two",
@@ -262,7 +262,7 @@
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "43240b534ecc93e8efdf9fafa2a23a060d7c383a6b949cc073c283c7fd9ee364"
+          "sha256": "4ddb2cf33db15e1e388d9d6e07c661422b4dbf86bd7810044a7908a53f67d79b"
         }
       ]
     },
