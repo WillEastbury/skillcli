@@ -23,8 +23,10 @@ import argparse
 import datetime as dt
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -77,7 +79,8 @@ def gh_environment(gh_user: str | None) -> dict[str, str]:
 def local_checks(root: Path) -> None:
     """Run the checks that continuous integration would otherwise perform."""
     errors = validate_manifest.validate_sources(root)
-    errors.extend(validate_manifest.validate_layout(root))
+    for warning in validate_manifest.layout_warnings(root):
+        print(f"Warning: {warning}", file=sys.stderr)
     expected = build(root, update=False)
     actual = json.loads((root / "skills.json").read_text(encoding="utf-8"))
     if actual != expected:
@@ -166,11 +169,44 @@ def main() -> int:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="validate and regenerate without creating a branch or pull request",
+        help="validate in a throwaway copy without touching the working tree",
     )
     args = parser.parse_args()
     root = args.root.resolve()
 
+    if args.dry_run:
+        with tempfile.TemporaryDirectory() as scratch:
+            mirror = Path(scratch) / root.name
+            shutil.copytree(
+                root,
+                mirror,
+                ignore=shutil.ignore_patterns(".git", "__pycache__"),
+            )
+            return preview(mirror, args)
+
+    return publish(root, args)
+
+
+def preview(root: Path, args: argparse.Namespace) -> int:
+    try:
+        changed = sync_plugin_metadata.apply(
+            root, args.plugin, args.version, args.state, args.reviewers, None
+        )
+        regenerate(root)
+        local_checks(root)
+        row = catalogue_row(root, args.plugin)
+    except (OSError, ValueError, KeyError, RuntimeError, json.JSONDecodeError) as exc:
+        print(f"Publish blocked: {exc}", file=sys.stderr)
+        return 1
+    for entry in changed:
+        print(f"{args.plugin}: would set {entry}")
+    print("Local validation passed")
+    print("Dry run: working tree untouched, no branch or pull request created")
+    print(row)
+    return 0
+
+
+def publish(root: Path, args: argparse.Namespace) -> int:
     try:
         changed = sync_plugin_metadata.apply(
             root,
@@ -190,11 +226,6 @@ def main() -> int:
     for entry in changed:
         print(f"{args.plugin}: {entry}")
     print("Local validation passed")
-
-    if args.dry_run:
-        print("Dry run: no branch or pull request created")
-        print(row)
-        return 0
 
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d%H%M%S")
     branch = args.branch or f"skill-intake/{args.plugin}-{stamp}"

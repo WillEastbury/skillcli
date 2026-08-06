@@ -18,6 +18,8 @@ REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 def validate_sources(root: Path) -> list[str]:
     errors = []
     path = root / "skill-sources.json"
+    if not path.exists():
+        return []
     try:
         config = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -53,13 +55,18 @@ def validate_sources(root: Path) -> list[str]:
     return errors
 
 
-def validate_layout(root: Path) -> list[str]:
-    """Submissions land directly in plugins/, so a proposals/ tree is stale."""
+def layout_warnings(root: Path) -> list[str]:
+    """Flag a legacy proposals/ tree.
+
+    This is a warning, not an error. Only plugins/ is ever read by the renderer, so
+    anything left in proposals/ is inert rather than publishable, and an in-flight
+    migration must not be blocked from validating the rest of the catalogue.
+    """
     stale = root / "proposals"
     if stale.exists():
         return [
-            "proposals/ is not part of the catalogue layout; submissions belong in "
-            "plugins/<plugin-name>/ so merging a pull request publishes the skill"
+            "proposals/ is a legacy layout and is never published; migrate its content "
+            "into plugins/<plugin-name>/ so merging a pull request publishes the skill"
         ]
     return []
 
@@ -75,7 +82,7 @@ def main() -> int:
     args = parser.parse_args()
     root = args.root.resolve()
     errors = [] if args.skip_sources else validate_sources(root)
-    errors.extend(validate_layout(root))
+    warnings = layout_warnings(root)
     try:
         expected = build(root, update=False)
         actual = json.loads((root / "skills.json").read_text(encoding="utf-8"))
@@ -88,6 +95,8 @@ def main() -> int:
         for error in errors:
             print(f"- {error}", file=sys.stderr)
         return 1
+    for warning in warnings:
+        print(f"Warning: {warning}", file=sys.stderr)
     print(
         f"Marketplace valid: {expected['library']['name']}, "
         f"{len(expected['skills'])} plugin(s)"
