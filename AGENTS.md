@@ -29,6 +29,22 @@ skillcli self-update
 Skill Zero and Skill One orchestrate this CLI. Do not duplicate its source merging,
 destination detection, installation, removal, or update logic in prompts.
 
+## Submission and approval
+
+- Submissions land directly in `plugins/<plugin-name>/` and are registered in
+  `.github/plugin/marketplace.json`. There is no `proposals/` tree and no promote step.
+- Submit with `review.state` set to `pending`. A maintainer sets `approved` while
+  accepting the pull request, so merging publishes the skill immediately.
+- A plugin version is declared in `plugin.json`, `.github/plugin/marketplace.json`, and
+  the `SKILL.md` frontmatter. Change all three with
+  `python tools/sync_plugin_metadata.py`, never by hand.
+- Never hand-edit `skills.json`, `SKILLS.md`, or the generated catalogue block in
+  `README.md`. Regenerate with `tools/render_marketplace.py` and `tools/render_readme.py`.
+- The catalogue table row is rendered from plugin metadata and reviewed in the pull
+  request diff.
+- Catalogues that cannot run GitHub Actions must publish with `tools/publish_skill.py`,
+  which runs the full validation suite locally before creating the pull request.
+
 ## Multi-source behaviour
 
 - Public catalogues work without authentication.

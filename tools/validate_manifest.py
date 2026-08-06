@@ -53,6 +53,17 @@ def validate_sources(root: Path) -> list[str]:
     return errors
 
 
+def validate_layout(root: Path) -> list[str]:
+    """Submissions land directly in plugins/, so a proposals/ tree is stale."""
+    stale = root / "proposals"
+    if stale.exists():
+        return [
+            "proposals/ is not part of the catalogue layout; submissions belong in "
+            "plugins/<plugin-name>/ so merging a pull request publishes the skill"
+        ]
+    return []
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -64,6 +75,7 @@ def main() -> int:
     args = parser.parse_args()
     root = args.root.resolve()
     errors = [] if args.skip_sources else validate_sources(root)
+    errors.extend(validate_layout(root))
     try:
         expected = build(root, update=False)
         actual = json.loads((root / "skills.json").read_text(encoding="utf-8"))

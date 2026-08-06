@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 from typing import Any
 
@@ -94,8 +95,12 @@ def main() -> int:
     readme_path = root / "README.md"
     skills_path = root / "SKILLS.md"
     current_readme = readme_path.read_text(encoding="utf-8")
-    core_ids = {"skillcli-skill-zero", "skillcli-skill-one", "skillcli-skill-two"}
-    core = [skill for skill in manifest["skills"] if skill["id"] in core_ids]
+    catalogue = json.loads((root / "catalogue.json").read_text(encoding="utf-8"))
+    selected = catalogue["library"].get("readmePlugins")
+    if selected is None:
+        core = manifest["skills"]
+    else:
+        core = [skill for skill in manifest["skills"] if skill["id"] in set(selected)]
     expected_readme = replace_catalog(
         current_readme,
         table(core, manifest["library"]["namespace"]),

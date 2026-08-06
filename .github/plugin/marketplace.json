@@ -16,14 +16,14 @@
     },
     {
       "name": "skillcli-skill-one",
-      "description": "Submit proposed skills through a governed GitHub intake workflow.",
-      "version": "4.1.0",
+      "description": "Submit proposed skills as ready-to-merge plugin packages through a governed pull request.",
+      "version": "5.0.0",
       "source": "plugins/skillcli-skill-one"
     },
     {
       "name": "skillcli-skill-two",
       "description": "Build a reusable skill when no approved catalogue skill matches.",
-      "version": "2.1.0",
+      "version": "3.0.0",
       "source": "plugins/skillcli-skill-two"
     },
     {
