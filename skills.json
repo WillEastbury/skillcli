@@ -8,11 +8,6 @@
     "repository": "https://github.com/WillEastbury/skillcli",
     "namespace": "WillEastbury/skillcli",
     "defaultRef": "main",
-    "readmePlugins": [
-      "skillcli-skill-zero",
-      "skillcli-skill-one",
-      "skillcli-skill-two"
-    ],
     "updatePolicy": "notify-only",
     "governance": "Only reviewed plugins merged through the protected repository process are published.",
     "browserSkillId": "skillcli-skill-zero"

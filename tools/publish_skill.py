@@ -76,6 +76,44 @@ def gh_environment(gh_user: str | None) -> dict[str, str]:
     return env
 
 
+def schema_checks(root: Path) -> list[str]:
+    """Validate against the JSON Schemas, which catalogues without CI cannot run."""
+    schemas = root / "schemas"
+    if not schemas.is_dir():
+        return []
+    try:
+        from jsonschema import Draft202012Validator, FormatChecker
+    except ImportError:
+        return [
+            "jsonschema is required for local validation; "
+            'install it with: python -m pip install "jsonschema==4.23.0"'
+        ]
+    checker = FormatChecker()
+    pairs: list[tuple[Path, Path]] = [
+        (schemas / "skills.schema.json", root / "skills.json"),
+        (schemas / "catalogue.schema.json", root / "catalogue.json"),
+        (schemas / "sources.schema.json", root / "skill-sources.json"),
+    ]
+    plugin_schema = schemas / "skillcli-plugin.schema.json"
+    if plugin_schema.is_file():
+        pairs += [
+            (plugin_schema, path) for path in sorted(root.glob("plugins/*/skillcli.json"))
+        ]
+    errors = []
+    for schema_path, document_path in pairs:
+        if not schema_path.is_file() or not document_path.is_file():
+            continue
+        validator = Draft202012Validator(
+            json.loads(schema_path.read_text(encoding="utf-8")),
+            format_checker=checker,
+        )
+        for error in validator.iter_errors(
+            json.loads(document_path.read_text(encoding="utf-8"))
+        ):
+            errors.append(f"{document_path.name}: {error.message}")
+    return errors
+
+
 def local_checks(root: Path) -> None:
     """Run the checks that continuous integration would otherwise perform."""
     errors = validate_manifest.validate_sources(root)
@@ -85,6 +123,7 @@ def local_checks(root: Path) -> None:
     actual = json.loads((root / "skills.json").read_text(encoding="utf-8"))
     if actual != expected:
         errors.append("skills.json is stale; run python tools/render_marketplace.py")
+    errors.extend(schema_checks(root))
     if errors:
         raise RuntimeError("; ".join(errors))
     tests = root / "tests"

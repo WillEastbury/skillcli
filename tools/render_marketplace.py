@@ -234,6 +234,7 @@ def build(root: Path, update: bool) -> dict[str, Any]:
         elif metadata.get("files") != records:
             raise ValueError(f"unlisted plugin checksums are stale: {relative_plugin}")
     library = dict(catalogue["library"])
+    library.pop("readmePlugins", None)
     browser_plugin = library.pop("browserPlugin", None)
     if browser_plugin:
         library["browserSkillId"] = browser_plugin
