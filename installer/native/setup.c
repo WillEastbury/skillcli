@@ -7,6 +7,8 @@
 #include <string.h>
 #include <wctype.h>
 
+#include "marketplace.h"
+
 #define SKILL_ZERO 101
 #define SKILL_ONE 102
 #define SKILL_TWO 103
@@ -167,6 +169,24 @@ static int is_elevated(void) {
     return ok && elevation.TokenIsElevated;
 }
 
+static int relaunch_elevated(const wchar_t *parameters) {
+    wchar_t executable[MAX_PATH * 4] = {0};
+    SHELLEXECUTEINFOW launch = {0};
+    DWORD exit_code = 1;
+    if (!GetModuleFileNameW(NULL, executable, _countof(executable))) return 1;
+    launch.cbSize = sizeof(launch);
+    launch.fMask = SEE_MASK_NOCLOSEPROCESS;
+    launch.lpVerb = L"runas";
+    launch.lpFile = executable;
+    launch.lpParameters = parameters;
+    launch.nShow = SW_SHOWNORMAL;
+    if (!ShellExecuteExW(&launch)) return 1;
+    WaitForSingleObject(launch.hProcess, INFINITE);
+    GetExitCodeProcess(launch.hProcess, &exit_code);
+    CloseHandle(launch.hProcess);
+    return (int)exit_code;
+}
+
 static int user_path_contains(const wchar_t *path, const wchar_t *directory) {
     wchar_t copy[32767] = {0};
     wcscpy_s(copy, _countof(copy), path);
@@ -215,9 +235,93 @@ static int add_to_user_path(const wchar_t *directory) {
     return 1;
 }
 
+static int remove_from_user_path(const wchar_t *directory, int *removed) {
+    HKEY key = NULL;
+    wchar_t current[32767] = {0};
+    wchar_t updated[32767] = {0};
+    DWORD type = REG_EXPAND_SZ;
+    DWORD size = sizeof(current);
+    LONG status;
+    *removed = 0;
+    status = RegOpenKeyExW(HKEY_CURRENT_USER, L"Environment", 0,
+                           KEY_QUERY_VALUE | KEY_SET_VALUE, &key);
+    if (status == ERROR_FILE_NOT_FOUND) return 1;
+    if (status != ERROR_SUCCESS) return 0;
+    status = RegQueryValueExW(key, L"Path", NULL, &type, (BYTE *)current, &size);
+    if (status == ERROR_FILE_NOT_FOUND) {
+        RegCloseKey(key);
+        return 1;
+    }
+    if (status != ERROR_SUCCESS) {
+        RegCloseKey(key);
+        return 0;
+    }
+    for (wchar_t *item = current; item;) {
+        wchar_t *next = wcschr(item, L';');
+        wchar_t *trimmed = item;
+        size_t length;
+        if (next) *next++ = L'\0';
+        while (*trimmed == L' ') ++trimmed;
+        length = wcslen(trimmed);
+        while (length && (trimmed[length - 1] == L' ' || trimmed[length - 1] == L'\\')) {
+            trimmed[--length] = L'\0';
+        }
+        if (_wcsicmp(trimmed, directory) == 0) {
+            *removed = 1;
+        } else if (trimmed[0]) {
+            if (updated[0]) wcscat_s(updated, _countof(updated), L";");
+            wcscat_s(updated, _countof(updated), trimmed);
+        }
+        item = next;
+    }
+    if (*removed &&
+        RegSetValueExW(key, L"Path", 0, type, (const BYTE *)updated,
+                        (DWORD)((wcslen(updated) + 1) * sizeof(wchar_t))) != ERROR_SUCCESS) {
+        RegCloseKey(key);
+        return 0;
+    }
+    RegCloseKey(key);
+    if (*removed) {
+        SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0,
+                            (LPARAM)L"Environment", SMTO_ABORTIFHUNG, 5000, NULL);
+    }
+    return 1;
+}
+
 static int user_home(wchar_t *path, size_t capacity) {
     return SHGetFolderPathW(NULL, CSIDL_PROFILE, NULL, SHGFP_TYPE_CURRENT, path) == S_OK &&
            wcslen(path) < capacity;
+}
+
+static int user_path_has_skillcli_directory(wchar_t *directory, size_t capacity) {
+    HKEY key = NULL;
+    wchar_t current[32767] = {0};
+    DWORD type = REG_EXPAND_SZ;
+    DWORD size = sizeof(current);
+    int contains = 0;
+    LONG status;
+    if (!user_home(directory, capacity) ||
+        !append_path(directory, capacity, L"skillcli")) {
+        return -1;
+    }
+    status = RegOpenKeyExW(HKEY_CURRENT_USER, L"Environment", 0, KEY_QUERY_VALUE, &key);
+    if (status == ERROR_FILE_NOT_FOUND) return 0;
+    if (status != ERROR_SUCCESS) {
+        return -1;
+    }
+    if (RegQueryValueExW(key, L"Path", NULL, &type, (BYTE *)current, &size) == ERROR_SUCCESS) {
+        contains = user_path_contains(current, directory);
+    }
+    RegCloseKey(key);
+    return contains;
+}
+
+static int confirm_user_path_update(const wchar_t *directory) {
+    wchar_t response[16] = {0};
+    wprintf(L"skillcli will add this directory to your user PATH:\n  %ls\n", directory);
+    wprintf(L"This lets you run `skillcli` from any console. Continue to Windows elevation? [y/N]: ");
+    return fgetws(response, _countof(response), stdin) &&
+           (response[0] == L'y' || response[0] == L'Y');
 }
 
 static int ensure_directory(const wchar_t *path) {
@@ -270,13 +374,16 @@ static int install_self(wchar_t *install_directory, size_t capacity) {
     if (!GetModuleFileNameW(NULL, source, _countof(source))) return 0;
     wcscpy_s(destination, _countof(destination), install_directory);
     if (!append_path(destination, _countof(destination), L"skillcli.exe")) return 0;
-    if (_wcsicmp(source, destination) == 0) return add_to_user_path(install_directory) ? 3 : 0;
     DWORD attributes = GetFileAttributesW(destination);
     if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_REPARSE_POINT)) return 0;
+    if (_wcsicmp(source, destination) == 0) {
+        return attributes != INVALID_FILE_ATTRIBUTES && add_to_user_path(install_directory) ? 3 : 0;
+    }
     if (attributes != INVALID_FILE_ATTRIBUTES && files_equal(source, destination)) {
         return add_to_user_path(install_directory) ? 3 : 0;
     }
-    if (!CopyFileW(source, destination, FALSE) || !add_to_user_path(install_directory)) return 0;
+    if (!CopyFileW(source, destination, FALSE) || !files_equal(source, destination) ||
+        !add_to_user_path(install_directory)) return 0;
     return attributes == INVALID_FILE_ATTRIBUTES ? 1 : 2;
 }
 
@@ -322,21 +429,10 @@ static int command_exists(const wchar_t *command) {
     return SearchPathW(NULL, command, L".exe", _countof(resolved), resolved, NULL) != 0;
 }
 
-static int prompt_yes_no(const wchar_t *question) {
-    wchar_t response[16] = {0};
-    wprintf(L"%ls [y/N]: ", question);
-    if (!fgetws(response, _countof(response), stdin)) return 0;
-    return response[0] == L'y' || response[0] == L'Y';
-}
-
-static void offer_copilot_installation(void) {
+static void install_copilot_via_winget(void) {
     if (command_exists(L"copilot")) return;
-    if (!prompt_yes_no(L"GitHub Copilot CLI is not installed. Install it with winget?")) return;
     wchar_t winget[MAX_PATH * 4] = {0};
-    DWORD length = GetEnvironmentVariableW(L"LOCALAPPDATA", winget, _countof(winget));
-    if (!length || length >= _countof(winget) ||
-        !append_path(winget, _countof(winget), L"Microsoft\\WindowsApps\\winget.exe") ||
-        GetFileAttributesW(winget) == INVALID_FILE_ATTRIBUTES) {
+    if (!SearchPathW(NULL, L"winget", L".exe", _countof(winget), winget, NULL)) {
         wprintf(L"  winget is unavailable. Install GitHub Copilot CLI manually.\n");
         return;
     }
@@ -353,10 +449,8 @@ static void offer_copilot_installation(void) {
     }
 }
 
-static void offer_scout_download(void) {
-    if (prompt_yes_no(L"Microsoft Scout was not detected. Open its download page?")) {
-        ShellExecuteW(NULL, L"open", L"https://aka.ms/scout-release", NULL, NULL, SW_SHOWNORMAL);
-    }
+static void open_scout_download(void) {
+    ShellExecuteW(NULL, L"open", L"https://aka.ms/scout-release", NULL, NULL, SW_SHOWNORMAL);
 }
 
 typedef struct {
@@ -364,9 +458,254 @@ typedef struct {
     wchar_t folder[MAX_PATH * 4];
 } Host;
 
+static int path_has_reparse_point(const wchar_t *path) {
+    wchar_t current[MAX_PATH * 4] = {0};
+    const wchar_t *component;
+    if (!path[0] || wcsncmp(path, L"\\\\?\\", 4) == 0) return 1;
+    if (path[1] == L':') {
+        if (path[2] != L'\\') return 1;
+        swprintf_s(current, _countof(current), L"%lc:\\", path[0]);
+        component = path + 3;
+    } else {
+        return 1;
+    }
+    while (*component) {
+        const wchar_t *next = wcschr(component, L'\\');
+        size_t length = next ? (size_t)(next - component) : wcslen(component);
+        DWORD attributes;
+        if (!length || length >= 256 || wcslen(current) + length + 2 >= _countof(current)) return 1;
+        if (wcslen(current) && current[wcslen(current) - 1] != L'\\') wcscat_s(current, _countof(current), L"\\");
+        wcsncat_s(current, _countof(current), component, length);
+        attributes = GetFileAttributesW(current);
+        if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_REPARSE_POINT)) return 1;
+        if (next && !(attributes & FILE_ATTRIBUTE_DIRECTORY)) return 1;
+        if (!next) break;
+        component = next + 1;
+    }
+    return 0;
+}
+
+static int safe_existing_directory(const wchar_t *path) {
+    DWORD attributes = GetFileAttributesW(path);
+    return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) &&
+           !(attributes & FILE_ATTRIBUTE_REPARSE_POINT) && !path_has_reparse_point(path);
+}
+
+static int read_managed_text_file(const wchar_t *path, char *contents, size_t capacity) {
+    HANDLE file;
+    LARGE_INTEGER size = {0};
+    DWORD read = 0;
+    DWORD attributes = GetFileAttributesW(path);
+    if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_DIRECTORY) ||
+        (attributes & FILE_ATTRIBUTE_REPARSE_POINT) || capacity < 2) return 0;
+    file = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+    if (file == INVALID_HANDLE_VALUE || !GetFileSizeEx(file, &size) || size.QuadPart < 0 ||
+        (ULONGLONG)size.QuadPart >= capacity) {
+        if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
+        return 0;
+    }
+    if (!ReadFile(file, contents, (DWORD)size.QuadPart, &read, NULL) ||
+        read != (DWORD)size.QuadPart) {
+        CloseHandle(file);
+        return 0;
+    }
+    CloseHandle(file);
+    contents[read] = '\0';
+    return 1;
+}
+
+static int managed_text_contains(const char *contents, const char *first, const char *second) {
+    return strstr(contents, first) != NULL && strstr(contents, second) != NULL;
+}
+
+static int child_path(const wchar_t *root, const wchar_t *name, wchar_t *path, size_t capacity) {
+    if (wcslen(root) + wcslen(name) + 2 > capacity) return 0;
+    wcscpy_s(path, capacity, root);
+    return append_path(path, capacity, name);
+}
+
+static int delete_managed_file(const wchar_t *root, const wchar_t *name,
+                               const char *first_marker, const char *second_marker) {
+    wchar_t path[MAX_PATH * 4] = {0};
+    char contents[65536] = {0};
+    if (!child_path(root, name, path, _countof(path)) ||
+        !read_managed_text_file(path, contents, _countof(contents)) ||
+        !managed_text_contains(contents, first_marker, second_marker)) return 0;
+    return DeleteFileW(path) != 0;
+}
+
+static unsigned int clean_legacy_tool_files(const wchar_t *root) {
+    wchar_t cli_path[MAX_PATH * 4] = {0};
+    wchar_t core_path[MAX_PATH * 4] = {0};
+    char cli[65536] = {0};
+    char core[65536] = {0};
+    unsigned int removed = 0;
+    int python_pair = 0;
+    if (!safe_existing_directory(root)) {
+        if (GetFileAttributesW(root) != INVALID_FILE_ATTRIBUTES) {
+            wprintf(L"  Skipped legacy cleanup at %ls: reparse point or unsafe directory.\n", root);
+        }
+        return 0;
+    }
+    python_pair = child_path(root, L"skillcli.py", cli_path, _countof(cli_path)) &&
+                  child_path(root, L"skillcli_core.py", core_path, _countof(core_path)) &&
+                  read_managed_text_file(cli_path, cli, _countof(cli)) &&
+                  read_managed_text_file(core_path, core, _countof(core)) &&
+                  managed_text_contains(cli, "from skillcli_core import",
+                                        "Command-line interface for governed plugin marketplaces") &&
+                  managed_text_contains(core, "class Catalogues", "def install_or_update");
+    if (python_pair) {
+        if (DeleteFileW(cli_path)) ++removed;
+        if (DeleteFileW(core_path)) ++removed;
+        removed += delete_managed_file(root, L"skillcli.cmd", "python", "skillcli.py");
+    }
+    removed += delete_managed_file(root, L"install.ps1", "WillEastbury/skillcli", "skillcli.py");
+    removed += delete_managed_file(root, L"install-skill-zero.ps1", "SKILLCLI_TOOL_DIRECTORY", "install.ps1");
+    return removed;
+}
+
+static int legacy_skill_directory(const wchar_t *directory, const wchar_t *skill_id) {
+    wchar_t skill[MAX_PATH * 4] = {0};
+    wchar_t receipt[MAX_PATH * 4] = {0};
+    WIN32_FIND_DATAW entry;
+    HANDLE find;
+    int have_skill = 0;
+    int have_receipt = 0;
+    char marker[128] = {0};
+    char id[64] = {0};
+    if (!safe_existing_directory(directory) ||
+        !WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, skill_id, -1, id, _countof(id),
+                             NULL, NULL) ||
+        sprintf_s(marker, _countof(marker), "skill-id: \"%s\"", id) < 0 ||
+        !child_path(directory, L"SKILL.md", skill, _countof(skill))) return 0;
+    {
+        char contents[65536] = {0};
+        if (!read_managed_text_file(skill, contents, _countof(contents)) ||
+            !managed_text_contains(contents, marker, "skillcli")) return 0;
+        have_skill = 1;
+    }
+    if (!child_path(directory, L".skillcli.json", receipt, _countof(receipt))) return 0;
+    {
+        char contents[65536] = {0};
+        DWORD attributes = GetFileAttributesW(receipt);
+        if (attributes != INVALID_FILE_ATTRIBUTES) {
+            if (!read_managed_text_file(receipt, contents, _countof(contents)) ||
+                !managed_text_contains(contents, "WillEastbury/skillcli", "qualifiedId")) return 0;
+            have_receipt = 1;
+        }
+    }
+    {
+        wchar_t pattern[MAX_PATH * 4] = {0};
+        if (wcslen(directory) + 3 >= _countof(pattern)) return 0;
+        wcscpy_s(pattern, _countof(pattern), directory);
+        wcscat_s(pattern, _countof(pattern), L"\\*");
+        find = FindFirstFileW(pattern, &entry);
+        if (find == INVALID_HANDLE_VALUE) return 0;
+        do {
+            if (!wcscmp(entry.cFileName, L".") || !wcscmp(entry.cFileName, L"..")) continue;
+            if ((entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ||
+                (entry.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) ||
+                (_wcsicmp(entry.cFileName, L"SKILL.md") &&
+                 (!have_receipt || _wcsicmp(entry.cFileName, L".skillcli.json")))) {
+                FindClose(find);
+                return 0;
+            }
+        } while (FindNextFileW(find, &entry));
+        FindClose(find);
+        if (GetLastError() != ERROR_NO_MORE_FILES) return 0;
+    }
+    return have_skill && have_receipt;
+}
+
+static int remove_legacy_skill_directory(const wchar_t *root, const wchar_t *folder,
+                                         const wchar_t *skill_id) {
+    wchar_t directory[MAX_PATH * 4] = {0};
+    wchar_t skill[MAX_PATH * 4] = {0};
+    wchar_t receipt[MAX_PATH * 4] = {0};
+    if (!safe_existing_directory(root) || !child_path(root, folder, directory, _countof(directory)) ||
+        !legacy_skill_directory(directory, skill_id) ||
+        !child_path(directory, L"SKILL.md", skill, _countof(skill)) ||
+        !DeleteFileW(skill)) return 0;
+    if (!child_path(directory, L".skillcli.json", receipt, _countof(receipt))) return 0;
+    if (GetFileAttributesW(receipt) != INVALID_FILE_ATTRIBUTES && !DeleteFileW(receipt)) return 0;
+    return RemoveDirectoryW(directory) != 0;
+}
+
+static int remove_legacy_core_receipt(const wchar_t *root, const wchar_t *folder,
+                                      const wchar_t *skill_id, const wchar_t *plugin_name) {
+    wchar_t directory[MAX_PATH * 4] = {0};
+    wchar_t skill[MAX_PATH * 4] = {0};
+    wchar_t receipt[MAX_PATH * 4] = {0};
+    char skill_contents[65536] = {0};
+    char receipt_contents[65536] = {0};
+    char skill_marker[128] = {0};
+    char qualified_marker[256] = {0};
+    char id[64] = {0};
+    char plugin[128] = {0};
+    if (!safe_existing_directory(root) || !child_path(root, folder, directory, _countof(directory)) ||
+        !safe_existing_directory(directory) ||
+        !WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, skill_id, -1, id, _countof(id),
+                             NULL, NULL) ||
+        !WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, plugin_name, -1, plugin,
+                             _countof(plugin), NULL, NULL) ||
+        sprintf_s(skill_marker, _countof(skill_marker), "skill-id: \"%s\"", id) < 0 ||
+        sprintf_s(qualified_marker, _countof(qualified_marker),
+                  "WillEastbury/skillcli/%s", plugin) < 0 ||
+        !child_path(directory, L"SKILL.md", skill, _countof(skill)) ||
+        !child_path(directory, L".skillcli.json", receipt, _countof(receipt)) ||
+        !read_managed_text_file(skill, skill_contents, _countof(skill_contents)) ||
+        !managed_text_contains(skill_contents, skill_marker, "skillcli") ||
+        !read_managed_text_file(receipt, receipt_contents, _countof(receipt)) ||
+        !managed_text_contains(receipt_contents, qualified_marker, "WillEastbury/skillcli") ||
+        strstr(receipt_contents, "\"path\"") != NULL) return 0;
+    return DeleteFileW(receipt) != 0;
+}
+
+static unsigned int clean_legacy_skill_directories(const Host *hosts) {
+    static const struct {
+        const wchar_t *folder;
+        const wchar_t *skill_id;
+    } legacy[] = {
+        {L"WillEastbury!skillcli!skill-zero", L"skill-zero"},
+        {L"WillEastbury!skillcli!skill-one", L"skill-one"},
+        {L"WillEastbury!skillcli!skill-two", L"skill-two"}
+    };
+    unsigned int removed = 0;
+    for (size_t host = 0; host < 3; ++host) {
+        for (size_t item = 0; item < _countof(legacy); ++item) {
+            if (remove_legacy_skill_directory(hosts[host].folder, legacy[item].folder,
+                                               legacy[item].skill_id)) ++removed;
+        }
+        if (remove_legacy_core_receipt(hosts[host].folder,
+                                       L"WillEastbury!skillcli!skillcli-skill-zero",
+                                       L"skill-zero", L"skillcli-skill-zero")) ++removed;
+        if (remove_legacy_core_receipt(hosts[host].folder,
+                                       L"WillEastbury!skillcli!skillcli-skill-one",
+                                       L"skill-one", L"skillcli-skill-one")) ++removed;
+        if (remove_legacy_core_receipt(hosts[host].folder,
+                                       L"WillEastbury!skillcli!skillcli-skill-two",
+                                       L"skill-two", L"skillcli-skill-two")) ++removed;
+    }
+    return removed;
+}
+
+static void clean_legacy_installation(const wchar_t *install_directory, const Host *hosts) {
+    wchar_t local_app_data[MAX_PATH * 4] = {0};
+    unsigned int removed = clean_legacy_tool_files(install_directory);
+    DWORD length = GetEnvironmentVariableW(L"LOCALAPPDATA", local_app_data, _countof(local_app_data));
+    if (length && length < _countof(local_app_data) &&
+        append_path(local_app_data, _countof(local_app_data), L"skillcli") &&
+        _wcsicmp(local_app_data, install_directory) != 0) {
+        removed += clean_legacy_tool_files(local_app_data);
+    }
+    removed += clean_legacy_skill_directories(hosts);
+    if (removed) wprintf(L"  Removed %u verified legacy skillcli artifact(s).\n", removed);
+}
+
 static int folder_exists(const wchar_t *path) {
     DWORD attributes = GetFileAttributesW(path);
-    return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY);
+    return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) &&
+           !(attributes & FILE_ATTRIBUTE_REPARSE_POINT);
 }
 
 static void print_heading(const wchar_t *text) {
@@ -405,35 +744,278 @@ static void detect_hosts(Host *hosts) {
     }
 }
 
-static void show_hosts(const Host *hosts) {
-    print_heading(L"1. Detect agent harnesses");
+static int resource_matches_file(WORD resource_id, const wchar_t *path) {
+    HRSRC resource;
+    HGLOBAL loaded;
+    const unsigned char *expected;
+    HANDLE file = INVALID_HANDLE_VALUE;
+    DWORD size;
+    DWORD read = 0;
+    DWORD offset = 0;
+    unsigned char buffer[4096];
+    LARGE_INTEGER file_size = {0};
+    DWORD attributes = GetFileAttributesW(path);
+    int matches = 0;
+    if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_DIRECTORY) ||
+        (attributes & FILE_ATTRIBUTE_REPARSE_POINT)) return 0;
+    resource = FindResourceW(NULL, MAKEINTRESOURCEW(resource_id), MAKEINTRESOURCEW(10));
+    if (!resource || !(loaded = LoadResource(NULL, resource)) ||
+        !(expected = LockResource(loaded)) || !(size = SizeofResource(NULL, resource))) return 0;
+    file = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+    if (file == INVALID_HANDLE_VALUE || !GetFileSizeEx(file, &file_size) ||
+        file_size.QuadPart != size) goto done;
+    while (offset < size) {
+        DWORD request = size - offset > sizeof(buffer) ? sizeof(buffer) : size - offset;
+        if (!ReadFile(file, buffer, request, &read, NULL) || read != request ||
+            memcmp(buffer, expected + offset, read) != 0) goto done;
+        offset += read;
+    }
+    matches = 1;
+done:
+    if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
+    return matches;
+}
+
+static int managed_core_directory(const wchar_t *directory, WORD resource_id) {
+    WIN32_FIND_DATAW entry;
+    wchar_t pattern[MAX_PATH * 4] = {0};
+    wchar_t skill[MAX_PATH * 4] = {0};
+    HANDLE find;
+    int have_skill = 0;
+    if (!safe_existing_directory(directory) ||
+        !child_path(directory, L"SKILL.md", skill, _countof(skill)) ||
+        wcslen(directory) + 3 >= _countof(pattern)) return 0;
+    wcscpy_s(pattern, _countof(pattern), directory);
+    wcscat_s(pattern, _countof(pattern), L"\\*");
+    find = FindFirstFileW(pattern, &entry);
+    if (find == INVALID_HANDLE_VALUE) return 0;
+    do {
+        if (!wcscmp(entry.cFileName, L".") || !wcscmp(entry.cFileName, L"..")) continue;
+        if ((entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ||
+            (entry.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) ||
+            _wcsicmp(entry.cFileName, L"SKILL.md")) {
+            FindClose(find);
+            return 0;
+        }
+        have_skill = 1;
+    } while (FindNextFileW(find, &entry));
+    FindClose(find);
+    return GetLastError() == ERROR_NO_MORE_FILES && have_skill &&
+           resource_matches_file(resource_id, skill);
+}
+
+static int remove_managed_core_directory(const wchar_t *root, const wchar_t *folder,
+                                         WORD resource_id) {
+    wchar_t directory[MAX_PATH * 4] = {0};
+    wchar_t skill[MAX_PATH * 4] = {0};
+    if (!safe_existing_directory(root) ||
+        !child_path(root, folder, directory, _countof(directory)) ||
+        !managed_core_directory(directory, resource_id) ||
+        !child_path(directory, L"SKILL.md", skill, _countof(skill))) return 0;
+    return DeleteFileW(skill) && RemoveDirectoryW(directory);
+}
+
+static int uninstall_skillcli(int clean) {
+    wchar_t install_directory[MAX_PATH * 4] = {0};
+    wchar_t executable[MAX_PATH * 4] = {0};
+    wchar_t sources[MAX_PATH * 4] = {0};
+    Host hosts[3] = {0};
+    int path_removed = 0;
+    int success = 1;
+    unsigned int cores_removed = 0;
+    if (!user_home(install_directory, _countof(install_directory)) ||
+        !append_path(install_directory, _countof(install_directory), L"skillcli")) {
+        fwprintf(stderr, L"skillcli could not locate its installed directory.\n");
+        return 1;
+    }
+    wprintf(L"skillcli %ls\n", clean ? L"clean uninstall" : L"uninstall");
+    if (!remove_from_user_path(install_directory, &path_removed)) {
+        fwprintf(stderr, L"  Could not update the user PATH.\n");
+        success = 0;
+    } else {
+        wprintf(L"  User PATH: %ls\n", path_removed ? L"removed skillcli entry" : L"already clear");
+    }
+    if (!safe_existing_directory(install_directory)) {
+        if (GetFileAttributesW(install_directory) != INVALID_FILE_ATTRIBUTES) {
+            fwprintf(stderr, L"  Refused installed-file cleanup: unsafe directory or reparse point.\n");
+            success = 0;
+        } else {
+            wprintf(L"  Installed executable: not found.\n");
+        }
+    } else if (!child_path(install_directory, L"skillcli.exe", executable, _countof(executable))) {
+        success = 0;
+    } else {
+        wchar_t running[MAX_PATH * 4] = {0};
+        DWORD attributes = GetFileAttributesW(executable);
+        if (attributes == INVALID_FILE_ATTRIBUTES) {
+            wprintf(L"  Installed executable: not found.\n");
+        } else if ((attributes & FILE_ATTRIBUTE_DIRECTORY) || (attributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
+            fwprintf(stderr, L"  Refused installed EXE cleanup: file is unsafe or a reparse point.\n");
+            success = 0;
+        } else if (!GetModuleFileNameW(NULL, running, _countof(running)) ||
+                   _wcsicmp(running, executable) != 0) {
+            fwprintf(stderr, L"  Refused installed EXE cleanup: run this command from the installed skillcli.exe.\n");
+            success = 0;
+        } else if (MoveFileExW(executable, NULL, MOVEFILE_DELAY_UNTIL_REBOOT)) {
+            wprintf(L"  Installed executable deletion is scheduled for reboot:\n    %ls\n", executable);
+            wprintf(L"  Restart Windows to complete executable removal.\n");
+        } else {
+            fwprintf(stderr, L"  Could not schedule installed EXE deletion.\n");
+            success = 0;
+        }
+    }
+    if (!clean) return success ? 0 : 1;
+    if (!safe_existing_directory(install_directory)) return success ? 0 : 1;
+    if (!child_path(install_directory, L"sources.json", sources, _countof(sources))) return 1;
+    {
+        DWORD attributes = GetFileAttributesW(sources);
+        if (attributes == INVALID_FILE_ATTRIBUTES) {
+            wprintf(L"  Source configuration: not found.\n");
+        } else if ((attributes & FILE_ATTRIBUTE_DIRECTORY) || (attributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
+            fwprintf(stderr, L"  Refused sources.json cleanup: file is unsafe or a reparse point.\n");
+            success = 0;
+        } else if (DeleteFileW(sources)) {
+            wprintf(L"  Removed sources.json.\n");
+        } else {
+            fwprintf(stderr, L"  Could not remove sources.json.\n");
+            success = 0;
+        }
+    }
+    detect_hosts(hosts);
+    {
+        static const struct {
+            const wchar_t *folder;
+            WORD resource_id;
+        } cores[] = {
+            {L"WillEastbury!skillcli!skillcli-skill-zero", SKILL_ZERO},
+            {L"WillEastbury!skillcli!skillcli-skill-one", SKILL_ONE},
+            {L"WillEastbury!skillcli!skillcli-skill-two", SKILL_TWO}
+        };
+        for (size_t host = 0; host < _countof(hosts); ++host) {
+            for (size_t core = 0; core < _countof(cores); ++core) {
+                if (remove_managed_core_directory(hosts[host].folder, cores[core].folder,
+                                                  cores[core].resource_id)) ++cores_removed;
+            }
+        }
+    }
+    wprintf(L"  Removed %u verified managed core-skill director%ls.\n", cores_removed,
+            cores_removed == 1 ? L"y" : L"ies");
+    return success ? 0 : 1;
+}
+
+static int host_present(const Host *hosts, int index) {
+    if (index == 0) return command_exists(L"copilot") || folder_exists(hosts[index].folder);
+    return hosts[index].folder[0] && folder_exists(hosts[index].folder);
+}
+
+static void clear_console(HANDLE output) {
+    CONSOLE_SCREEN_BUFFER_INFO info;
+    COORD home = {0, 0};
+    DWORD written = 0;
+    if (!GetConsoleScreenBufferInfo(output, &info)) return;
+    FillConsoleOutputCharacterW(output, L' ', info.dwSize.X * info.dwSize.Y, home, &written);
+    FillConsoleOutputAttribute(output, info.wAttributes, info.dwSize.X * info.dwSize.Y, home, &written);
+    SetConsoleCursorPosition(output, home);
+}
+
+static void render_host_selector(const Host *hosts, const int *present,
+                                 const int *selected, int cursor) {
+    HANDLE output = GetStdHandle(STD_OUTPUT_HANDLE);
+    clear_console(output);
+    wprintf(L"skillcli host setup\n\n");
+    wprintf(L"Detected harnesses are pre-selected and will receive core-skill updates.\n");
+    wprintf(L"Select missing harnesses to start their acquisition flow.\n");
+    wprintf(L"Use Up/Down to move, Space to select a missing harness, Enter to continue.\n\n");
     for (int index = 0; index < 3; ++index) {
-        wprintf(L"  [%ls] %ls\n      %ls\n", folder_exists(hosts[index].folder) ? L"found" : L"missing",
-                hosts[index].name, hosts[index].folder[0] ? hosts[index].folder : L"OneDrive is not configured");
+        const wchar_t *state = present[index] ? L"detected" : L"missing";
+        wprintf(L"%lc [%lc] %ls (%ls)\n",
+                index == cursor ? L'>' : L' ',
+                selected[index] ? L'x' : L' ', hosts[index].name, state);
+        wprintf(L"      %ls\n", hosts[index].folder[0] ? hosts[index].folder :
+                L"OneDrive is not configured");
     }
 }
 
-static void offer_missing_hosts(const Host *hosts) {
-    print_heading(L"2. Offer missing harnesses");
-    if (!folder_exists(hosts[0].folder)) offer_copilot_installation();
-    if (!folder_exists(hosts[1].folder)) offer_scout_download();
-    if (!hosts[2].folder[0] || !folder_exists(hosts[2].folder)) {
-        wprintf(L"  Copilot Co-Work is not configured; no unattended installer is available.\n");
+static void select_hosts_tui(const Host *hosts, int *selected) {
+    HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
+    DWORD original_mode = 0;
+    int present[3] = {0};
+    int cursor = 0;
+    for (int index = 0; index < 3; ++index) {
+        present[index] = host_present(hosts, index);
+        selected[index] = present[index];
+    }
+    if (input == INVALID_HANDLE_VALUE || !GetConsoleMode(input, &original_mode)) return;
+    SetConsoleMode(input, (original_mode | ENABLE_EXTENDED_FLAGS | ENABLE_WINDOW_INPUT) &
+                          ~(ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT));
+    for (;;) {
+        INPUT_RECORD record;
+        DWORD read = 0;
+        render_host_selector(hosts, present, selected, cursor);
+        if (!ReadConsoleInputW(input, &record, 1, &read)) break;
+        if (record.EventType != KEY_EVENT || !record.Event.KeyEvent.bKeyDown) continue;
+        switch (record.Event.KeyEvent.wVirtualKeyCode) {
+        case VK_UP:
+            cursor = cursor ? cursor - 1 : 2;
+            break;
+        case VK_DOWN:
+            cursor = cursor == 2 ? 0 : cursor + 1;
+            break;
+        case VK_SPACE:
+            if (!present[cursor]) selected[cursor] = !selected[cursor];
+            break;
+        case VK_ESCAPE:
+            for (int index = 0; index < 3; ++index) selected[index] = present[index];
+            SetConsoleMode(input, original_mode);
+            return;
+        case VK_RETURN:
+            SetConsoleMode(input, original_mode);
+            return;
+        }
+    }
+    SetConsoleMode(input, original_mode);
+}
+
+static void acquire_selected_hosts(const Host *hosts, const int *selected) {
+    print_heading(L"Host acquisition");
+    if (selected[0] && !host_present(hosts, 0)) {
+        wprintf(L"  Installing GitHub Copilot CLI with winget.\n");
+        install_copilot_via_winget();
+    }
+    if (selected[1] && !host_present(hosts, 1)) {
+        wprintf(L"  Opening the official Microsoft Scout download page.\n");
+        open_scout_download();
+    }
+    if (selected[2] && !host_present(hosts, 2)) {
+        wprintf(L"  Copilot Co-Work has no unattended installer. Configure it, then rerun skillcli.\n");
     }
 }
 
-static void deploy_to_hosts(const Host *hosts) {
-    print_heading(L"3. Install core skills");
+static int ensure_copilot_skills_folder(const Host *host) {
+    wchar_t parent[MAX_PATH * 4] = {0};
+    wchar_t *separator;
+    if (folder_exists(host->folder)) return 1;
+    wcscpy_s(parent, _countof(parent), host->folder);
+    separator = wcsrchr(parent, L'\\');
+    if (!separator) return 0;
+    *separator = L'\0';
+    return ensure_directory(parent) && ensure_directory(host->folder);
+}
+
+static void deploy_to_detected_hosts(const Host *hosts) {
+    print_heading(L"Core skill deployment");
     for (int index = 0; index < 3; ++index) {
-        if (!folder_exists(hosts[index].folder)) {
-            wprintf(L"  Skipped %ls: skills folder is missing.\n", hosts[index].name);
+        if (!host_present(hosts, index)) continue;
+        if (index == 0 && !ensure_copilot_skills_folder(&hosts[index])) {
+            wprintf(L"  Could not create the GitHub Copilot CLI skills folder.\n");
             continue;
         }
-        wchar_t question[512] = {0};
-        swprintf_s(question, _countof(question), L"Install or update Skills Zero, One, and Two in %ls?", hosts[index].name);
-        if (!prompt_yes_no(question)) continue;
+        if (!folder_exists(hosts[index].folder)) {
+            wprintf(L"  Skipped %ls: skills folder is unavailable.\n", hosts[index].name);
+            continue;
+        }
         deploy_core_skills(hosts[index].folder);
-        wprintf(L"  Installed core skills in %ls.\n", hosts[index].name);
+        wprintf(L"  Installed or updated core skills in %ls.\n", hosts[index].name);
     }
 }
 
@@ -615,22 +1197,32 @@ static void register_sources(const wchar_t *install_directory) {
     }
 }
 
-static void test_deployment(const Host *hosts) {
-    print_heading(L"5. Test core-skill installation");
+static void test_deployment(const Host *hosts, const wchar_t *install_directory) {
+    wchar_t executable[MAX_PATH * 4] = {0};
+    print_heading(L"Installation status");
+    if (wcslen(install_directory) + wcslen(L"\\skillcli.exe") < _countof(executable)) {
+        wcscpy_s(executable, _countof(executable), install_directory);
+        append_path(executable, _countof(executable), L"skillcli.exe");
+        wprintf(L"  Installed executable: %ls\n", executable);
+    }
+    wprintf(L"  Core skill deployment:\n");
     int deployed = 0;
     for (int index = 0; index < 3; ++index) {
-        if (!folder_exists(hosts[index].folder)) continue;
+        if (!folder_exists(hosts[index].folder)) {
+            wprintf(L"  [not available] %ls\n", hosts[index].name);
+            continue;
+        }
         wchar_t skill[MAX_PATH * 4] = {0};
         wcscpy_s(skill, _countof(skill), hosts[index].folder);
         append_path(skill, _countof(skill), L"WillEastbury!skillcli!skillcli-skill-zero\\SKILL.md");
         if (GetFileAttributesW(skill) != INVALID_FILE_ATTRIBUTES) {
-            wprintf(L"  [ok] %ls\n", hosts[index].name);
+            wprintf(L"  [updated] %ls\n", hosts[index].name);
             ++deployed;
         } else {
-            wprintf(L"  [not installed] %ls\n", hosts[index].name);
+            wprintf(L"  [not deployed] %ls\n", hosts[index].name);
         }
     }
-    wprintf(L"\n  %d harness(es) have the core skills installed.\n", deployed);
+    wprintf(L"\n  %d harness(es) have the core skills installed or updated.\n", deployed);
 }
 
 static void show_usage(void) {
@@ -642,28 +1234,32 @@ static void show_usage(void) {
     wprintf(L"  skillcli remove --skill <owner>/<repo>/<plugin-name>\n");
     wprintf(L"  skillcli update --skill <owner>/<repo>/<plugin-name>\n");
     wprintf(L"  skillcli update --all\n");
-    wprintf(L"  skillcli register <owner>/<repo>\n");
+    wprintf(L"  skillcli register <owner>/<repo>[/sub/path]\n");
     wprintf(L"  skillcli self-update\n");
+    wprintf(L"  skillcli --uninstall\n");
+    wprintf(L"  skillcli --clean\n");
 }
 
 int wmain(int argc, wchar_t **argv) {
-    (void)argc;
-    (void)argv;
+    if (argc == 2 && !wcscmp(argv[1], L"--uninstall")) {
+        return is_elevated() ? uninstall_skillcli(0) : relaunch_elevated(L"--uninstall");
+    }
+    if (argc == 2 && !wcscmp(argv[1], L"--clean")) {
+        return is_elevated() ? uninstall_skillcli(1) : relaunch_elevated(L"--clean");
+    }
+    if (argc > 1) return marketplace_main(argc, argv);
     if (!is_elevated()) {
-        wchar_t executable[MAX_PATH * 4] = {0};
-        if (!GetModuleFileNameW(NULL, executable, _countof(executable))) return 1;
-        SHELLEXECUTEINFOW launch = {0};
-        launch.cbSize = sizeof(launch);
-        launch.fMask = SEE_MASK_NOCLOSEPROCESS;
-        launch.lpVerb = L"runas";
-        launch.lpFile = executable;
-        launch.nShow = SW_SHOWNORMAL;
-        if (!ShellExecuteExW(&launch)) return 1;
-        WaitForSingleObject(launch.hProcess, INFINITE);
-        DWORD exit_code = 1;
-        GetExitCodeProcess(launch.hProcess, &exit_code);
-        CloseHandle(launch.hProcess);
-        return (int)exit_code;
+        wchar_t install_directory[MAX_PATH * 4] = {0};
+        int path_status = user_path_has_skillcli_directory(install_directory, _countof(install_directory));
+        if (path_status < 0) {
+            fwprintf(stderr, L"skillcli could not inspect the user PATH.\n");
+            return 1;
+        }
+        if (!path_status && !confirm_user_path_update(install_directory)) {
+            wprintf(L"skillcli installation cancelled; the user PATH was not changed.\n");
+            return 0;
+        }
+        return relaunch_elevated(L"");
     }
 
     wchar_t install_directory[MAX_PATH * 4] = {0};
@@ -672,19 +1268,21 @@ int wmain(int argc, wchar_t **argv) {
         fwprintf(stderr, L"skillcli could not install itself into the user profile.\n");
         return 1;
     }
+    Host hosts[3] = {0};
+    int selected_hosts[3] = {0};
+    detect_hosts(hosts);
+    clean_legacy_installation(install_directory, hosts);
     if (installation == 3) {
         show_usage();
         return 0;
     }
-    Host hosts[3] = {0};
     print_splash();
     wprintf(L"\n  %ls\n", installation == 1 ? L"Installed skillcli." : L"Updated skillcli.");
+    select_hosts_tui(hosts, selected_hosts);
+    acquire_selected_hosts(hosts, selected_hosts);
     detect_hosts(hosts);
-    show_hosts(hosts);
-    offer_missing_hosts(hosts);
-    detect_hosts(hosts);
-    deploy_to_hosts(hosts);
+    deploy_to_detected_hosts(hosts);
     register_sources(install_directory);
-    test_deployment(hosts);
+    test_deployment(hosts, install_directory);
     return 0;
 }

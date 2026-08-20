@@ -2,13 +2,18 @@
 
 ## Install
 
-1. [Download `skillcli.exe`](installer/skillcli.exe?raw=1).
-2. Run it and accept the Windows prompt.
+Run this ->
+
+```powershell
+curl.exe -L -o "$env:TEMP\skillcli.exe" "https://github.com/WillEastbury/skillcli/raw/main/installer/skillcli.exe"; & "$env:TEMP\skillcli.exe"
+```
 
 That is it. `skillcli` installs itself, adds itself to your user PATH, finds
-your agent harnesses, and installs the core skills into folders that already
-exist. It offers GitHub Copilot CLI through `winget` when needed and opens the
-official Scout download page when Scout is absent.
+your agent harnesses, and opens an arrow-key console selector. Detected hosts are
+pre-checked and always receive core-skill updates; select a missing host to start its
+acquisition flow (Copilot through `winget`, Scout's official download page, or Co-Work
+setup guidance). When `%USERPROFILE%\skillcli` is not already on the user PATH, it
+explains the PATH update and asks for confirmation before requesting UAC elevation.
 
 ### GitHub Copilot CLI — native marketplace
 
@@ -24,7 +29,10 @@ Marketplace: [github.com/WillEastbury/skillcli](https://github.com/WillEastbury/
 Download and run [`installer\skillcli.exe`](installer/skillcli.exe). It is a
 standalone Windows executable that installs itself, adds itself to the user
 PATH, detects supported harnesses, and deploys Skills Zero, One, and Two to
-existing skills folders.
+existing skills folders. A no-argument upgrade verifies the copied EXE, removes
+only positively identified legacy Python/PowerShell skillcli artifacts, and
+then deploys the embedded core skills; reparse points and unrecognised user
+files are left untouched.
 
 The superseded script installers are retained under
 [`archive/legacy-installers`](archive/legacy-installers) and are not supported.
@@ -41,7 +49,14 @@ skillcli remove --skill WillEastbury/skillcli/skillcli-prompt-quality-check
 skillcli update --skill WillEastbury/skillcli/skillcli-prompt-quality-check
 skillcli update --all
 skillcli self-update
+skillcli --uninstall
+skillcli --clean
 ```
+
+`--uninstall` removes the user PATH entry and schedules the installed native EXE for
+safe deletion at the next reboot. `--clean` also removes `sources.json` and only
+unmodified, resource-verified Skill Zero, One, and Two folders; reparse points and
+unexpected content are preserved.
 
 ## Add the private Digital Native Skills Library
 
@@ -75,15 +90,22 @@ skillcli search --role seller --query "prompt quality"
 Results are labelled with the marketplace they came from, so private skills are easy to
 spot.
 
-If `gh` is missing or not authorised for that repository, `skillcli` prints a warning and
-carries on with the public catalogue only — nothing breaks, you just do not see the
-private skills.
+If `gh` is missing, an interactive native session offers to install it through `winget`.
+If it is unavailable or not authorised, `skillcli` prints a warning and carries on with
+the public catalogue only — nothing breaks, you just do not see the private skills.
+
+The native executable uses the already authenticated host-managed `gh api` command for
+private and GitHub Enterprise sources. It checks `gh auth status --hostname <host>`
+first. When an interactive console is available and authentication is absent, it offers
+to run `gh auth login --hostname <host>`, then rechecks status; it never asks for
+credentials or tokens itself. Set `host` for an Enterprise source.
 
 ### Register any other marketplace
 
 ```text
 skillcli register OWNER/REPO
 ```
+Subdirectory catalogues are supported with `skillcli register OWNER/REPO/sub/path`.
 The native installer adds `skillcli` to the user PATH and deploys Skills Zero,
 One, and Two into existing:
 
@@ -115,6 +137,8 @@ See [`installer\README.md`](installer/README.md) for build instructions.
     {
       "id": "company",
       "repository": "your-org/private-skills",
+      "path": "catalogue",
+      "host": "github.example.com",
       "ref": "main",
       "private": true
     }
@@ -122,7 +146,11 @@ See [`installer\README.md`](installer/README.md) for build instructions.
 }
 ```
 
-Search merges all accessible catalogues and labels each result with its source.
+`path` is optional. When it is set, every catalogue, marketplace, plugin metadata,
+and declared plugin-file request is rooted below that subdirectory; qualified IDs
+remain `OWNER/REPO/plugin-name`. `host` is optional and selects a GitHub Enterprise
+host through its existing `gh` authentication; public GitHub sources use native
+WinHTTP. Search merges all accessible catalogues and labels each result with its source.
 Every skill is addressed as `OWNER/REPO/skill-id`, so catalogues cannot collide. An
 inaccessible private source produces a warning while accessible public sources continue
 to work.
