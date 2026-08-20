@@ -6,10 +6,8 @@
 
 | Prerequisite | Required? | Why |
 | --- | --- | --- |
-| **Python 3.10 or newer** | **Always** | `skillcli` is a Python CLI. The installer stops if `python` is missing or older than 3.10. |
+| Windows 10 or newer | **Always** | Runs the standalone native `skillcli.exe`. |
 | **GitHub CLI (`gh`), authenticated** | **Only for private catalogues** | Needed to read private/EMU catalogues such as the Digital Native Skills Library. **Without `gh` you can still use every public skill** — private sources are simply skipped with a warning. |
-| Windows PowerShell 5.1+ or PowerShell 7 | Windows installer only | Runs `install.ps1`. |
-| Bash and `curl` | macOS/Linux installer only | Runs `install.sh`. |
 | GitHub Copilot CLI signed in to GitHub | Native marketplace route only | Uses `/plugin marketplace add` instead of the standalone installer. |
 
 Public marketplaces and plugins are downloaded anonymously over HTTPS, so no GitHub
@@ -17,8 +15,7 @@ token is needed for the public catalogue.
 
 Check what you have:
 
-```powershell
-python --version   # need 3.10 or newer
+```text
 gh auth status     # optional: only needed for private catalogues
 ```
 
@@ -31,19 +28,15 @@ gh auth status     # optional: only needed for private catalogues
 
 Marketplace: [github.com/WillEastbury/skillcli](https://github.com/WillEastbury/skillcli)
 
-### Scout, Co-Work, and cross-host CLI
+### Native installer
 
-Windows:
+Download and run [`installer\skillcli.exe`](installer/skillcli.exe). It is a
+standalone Windows executable that installs itself, adds itself to the user
+PATH, detects supported harnesses, and deploys Skills Zero, One, and Two to
+existing skills folders.
 
-```powershell
-$p=Join-Path $env:TEMP 'skillcli-install.ps1'; iwr -UseBasicParsing -Headers @{Accept='application/vnd.github.raw+json';'User-Agent'='skillcli'} 'https://api.github.com/repos/WillEastbury/skillcli/contents/install.ps1?ref=main' -OutFile $p; Unblock-File $p; & $p; Remove-Item $p
-```
-
-macOS or Linux:
-
-```bash
-p="$(mktemp)"; curl -fsSL "https://raw.githubusercontent.com/WillEastbury/skillcli/main/install.sh" -o "$p"; bash "$p"; rm -f "$p"
-```
+The superseded script installers are retained under
+[`archive/legacy-installers`](archive/legacy-installers) and are not supported.
 
 `skillcli` is an MIT-licensed, agent-friendly CLI for searching and installing governed
 AI Markdown skills from one or more GitHub catalogues.
@@ -100,17 +93,20 @@ private skills.
 ```text
 skillcli register OWNER/REPO
 ```
-The installer downloads `skillcli`, adds it to the user PATH, and installs Skill Zero
-into detected:
+The native installer adds `skillcli` to the user PATH and deploys Skills Zero,
+One, and Two into existing:
 
 - GitHub Copilot CLI: `%USERPROFILE%\.copilot\skills`
 - Scout: `%USERPROFILE%\.scout\m-skills`
 - Copilot Co-Work: `%OneDrive%\Documents\Cowork\Skills`
 
-On macOS, Scout uses `~/.copilot/m-skills` and Co-Work discovery checks
-`~/Library/CloudStorage/OneDrive-*/Documents/Cowork/Skills`.
-
 The Co-Work copy includes a local catalogue snapshot for import through Customize.
+
+### Native Windows build
+
+The `installer` directory contains the standalone native C build. It requires
+no Python, PowerShell, .NET, or third-party runtime on the installed machine.
+See [`installer\README.md`](installer/README.md) for build instructions.
 
 ## Multiple catalogues
 
@@ -258,13 +254,8 @@ The native marketplace structure is authoritative:
 
 ## Core skills
 
-The installer sets up `skillcli` and **Skill Zero only**. Skill One and Skill Two are
-catalogue entries that Skill Zero installs on demand, after you ask for them:
-
-```text
-skillcli install --skill WillEastbury/skillcli/skillcli-skill-one
-skillcli install --skill WillEastbury/skillcli/skillcli-skill-two
-```
+The native installer sets up `skillcli` and Skills Zero, One, and Two in every
+supported harness whose skills folder already exists.
 
 <!-- BEGIN GENERATED SKILL CATALOG -->
 | ID | Name | Version | Status | Requirements | Description |
