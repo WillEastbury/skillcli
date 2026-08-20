@@ -2,22 +2,13 @@
 
 ## Install
 
-### Prerequisites
+1. [Download `skillcli.exe`](installer/skillcli.exe?raw=1).
+2. Run it and accept the Windows prompt.
 
-| Prerequisite | Required? | Why |
-| --- | --- | --- |
-| Windows 10 or newer | **Always** | Runs the standalone native `skillcli.exe`. |
-| **GitHub CLI (`gh`), authenticated** | **Only for private catalogues** | Needed to read private/EMU catalogues such as the Digital Native Skills Library. **Without `gh` you can still use every public skill** — private sources are simply skipped with a warning. |
-| GitHub Copilot CLI signed in to GitHub | Native marketplace route only | Uses `/plugin marketplace add` instead of the standalone installer. |
-
-Public marketplaces and plugins are downloaded anonymously over HTTPS, so no GitHub
-token is needed for the public catalogue.
-
-Check what you have:
-
-```text
-gh auth status     # optional: only needed for private catalogues
-```
+That is it. `skillcli` installs itself, adds itself to your user PATH, finds
+your agent harnesses, and installs the core skills into folders that already
+exist. It offers GitHub Copilot CLI through `winget` when needed and opens the
+official Scout download page when Scout is absent.
 
 ### GitHub Copilot CLI — native marketplace
 
