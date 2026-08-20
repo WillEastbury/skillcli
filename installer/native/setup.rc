@@ -1,0 +1,7 @@
+#define SKILL_ZERO 101
+#define SKILL_ONE 102
+#define SKILL_TWO 103
+
+SKILL_ZERO RCDATA "..\\..\\plugins\\skillcli-skill-zero\\skills\\skill-zero\\SKILL.md"
+SKILL_ONE RCDATA "..\\..\\plugins\\skillcli-skill-one\\skills\\skill-one\\SKILL.md"
+SKILL_TWO RCDATA "..\\..\\plugins\\skillcli-skill-two\\skills\\skill-two\\SKILL.md"

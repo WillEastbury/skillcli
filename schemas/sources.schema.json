@@ -33,6 +33,10 @@
             "type": "string",
             "minLength": 1
           },
+          "path": {
+            "type": "string",
+            "pattern": "^[^\\\\/]+(?:/[^\\\\/]+)*$"
+          },
           "private": {
             "type": "boolean"
           },
