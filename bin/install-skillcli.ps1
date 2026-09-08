@@ -7,8 +7,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$uri = 'https://raw.githubusercontent.com/WillEastbury/skillcli/589f6a8721ce86b0894bd813943be82581fdeefc/bin/skillcli.exe'
-$expected = 'D27E852A6F11DCE507BB6D18311F291029DEFDEB58A8A9B191EF35D8E61426FA'
+$uri = 'https://raw.githubusercontent.com/WillEastbury/skillcli/2c90a3d8d9882c893618c1e54b9c6f0c49244bc4/bin/skillcli.exe'
+$expected = '51DB5B8D5D0DE794BEC3727BDDAF28041723FB11E9BB5CD6579A86808BFB5329'
 $directory = Join-Path $env:LOCALAPPDATA 'SkillCLI\Bootstrap'
 $installer = Join-Path $directory 'skillcli.exe'
 
