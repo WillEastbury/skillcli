@@ -16,12 +16,12 @@ try {
     New-Item -ItemType Directory -Path $directory -Force | Out-Null
     Invoke-WebRequest $uri -OutFile $installer
     if ((Get-FileHash $installer -Algorithm SHA256).Hash -ne $expected) {
-        throw 'SkillCLI checksum verification failed.'
+        throw 'Frontier Agent Helper checksum verification failed.'
     }
     Unblock-File -LiteralPath $installer
     & $installer setup --source $Source
     if ($LASTEXITCODE) {
-        throw "SkillCLI setup failed with exit code $LASTEXITCODE."
+        throw "Frontier Agent Helper setup failed with exit code $LASTEXITCODE."
     }
 } finally {
     Remove-Item $installer -Force -ErrorAction SilentlyContinue
